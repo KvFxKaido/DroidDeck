@@ -2982,6 +2982,7 @@ class SessionActivity : ComponentActivity(), SurfaceHolder.Callback, com.droidde
                 SessionState.gameId?.takeIf { it.toLongOrNull() != null }
                     ?: intent.getStringExtra(SessionService.EXTRA_GAME_ID)
             )?.toLongOrNull()
+            com.droiddeck.launcher.core.RedmagicPerformance.onActiveGame(this, activeAppId?.toString())
             return FrameGen.mode(this, activeAppId?.toString())
         }
 
@@ -3081,6 +3082,7 @@ class SessionActivity : ComponentActivity(), SurfaceHolder.Callback, com.droidde
         val activeAppId = AgentGuest.activeSteamAppId(
             this, cachedIds + (ids ?: emptySet())
         )
+        com.droiddeck.launcher.core.RedmagicPerformance.onActiveGame(this, activeAppId?.toString())
         if (activeAppId == null) return FrameGen.Mode.OFF
         return FrameGen.mode(this, activeAppId.toString())
     }
