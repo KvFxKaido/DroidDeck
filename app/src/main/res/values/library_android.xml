@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="source_android">Android</string>
+    <string name="library_android_add">Add to Library</string>
+    <string name="library_android_remove">Remove from Library</string>
+</resources>
