@@ -4,7 +4,9 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -59,7 +61,7 @@ internal fun RedmagicPerformanceCard(
         onDismissRequest = { open = false },
         title = { Text(stringResource(R.string.redmagic_perf_title)) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.fillMaxWidth()) {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
                 Text(
                     stringResource(if (paired) R.string.redmagic_perf_hint else R.string.redmagic_perf_unpaired),
                     fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
