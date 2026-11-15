@@ -49,6 +49,26 @@ class LibraryAndroidTest {
         assertFalse(HomeLibrary.includes(tool, none, none))
     }
 
+    @Test fun anEmulatorThatOpensRomsStaysOutUnlessItIsAddedByHand() {
+        val emulator = app("org.ppsspp.ppsspp", game = true)
+        val game = app("a.game", game = true)
+        val emulators = setOf("org.ppsspp.ppsspp")
+        val none = emptySet<String>()
+        assertEquals(listOf("android:a.game/a.game.Main"), androidEntries(listOf(emulator, game), none, none, emulators).map { it.key })
+        assertEquals(2, androidEntries(listOf(emulator, game), none, none).size)
+        val (added, removed) = HomeLibrary.changed(none, none, emulator, inLibrary = true, emulators = emulators)
+        assertEquals(setOf(emulator.key) to none, added to removed)
+        assertTrue(HomeLibrary.includes(emulator, added, removed, emulators))
+        assertEquals(none to none, HomeLibrary.changed(added, removed, emulator, inLibrary = false, emulators = emulators))
+    }
+
+    @Test fun anEmulatorRemovedByHandBeforeTheRuleComesBackWhenAdded() {
+        val emulator = app("org.ppsspp.ppsspp", game = true)
+        val emulators = setOf("org.ppsspp.ppsspp")
+        val (added, removed) = HomeLibrary.changed(emptySet(), setOf(emulator.key), emulator, inLibrary = true, emulators = emulators)
+        assertTrue(HomeLibrary.includes(emulator, added, removed, emulators))
+    }
+
     @Test fun androidGetsItsOwnSourceAfterAdded() {
         val added = LibraryEntry("app:-5", Library.ADDED, "Game", Library.SteamGame(-5, "Game", null, Library.ADDED, source = Library.ADDED), null, true)
         val android = androidEntries(listOf(app("a.game", game = true)), emptySet(), emptySet())

@@ -9,10 +9,13 @@ object HomeLibrary {
     private const val PREFS = "home_launcher"
     private const val ADDED = "library_added"
     private const val REMOVED = "library_removed"
+    private const val EMULATORS = "library_emulators"
 
     var added by mutableStateOf<Set<String>>(emptySet())
         private set
     var removed by mutableStateOf<Set<String>>(emptySet())
+        private set
+    var emulators by mutableStateOf<Set<String>>(emptySet())
         private set
     private var loaded = false
 
@@ -22,17 +25,32 @@ object HomeLibrary {
         val p = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         added = p.getStringSet(ADDED, emptySet()).orEmpty().toSet()
         removed = p.getStringSet(REMOVED, emptySet()).orEmpty().toSet()
+        emulators = p.getStringSet(EMULATORS, emptySet()).orEmpty().toSet()
     }
 
-    fun includes(app: HomeApp.LaunchableApp, added: Set<String> = this.added, removed: Set<String> = this.removed): Boolean =
-        app.key !in removed && (app.game || app.key in added)
+    fun setEmulators(context: Context, packages: Set<String>) {
+        load(context)
+        if (packages == emulators) return
+        emulators = packages
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putStringSet(EMULATORS, packages).apply()
+    }
 
-    fun changed(added: Set<String>, removed: Set<String>, app: HomeApp.LaunchableApp, inLibrary: Boolean): Pair<Set<String>, Set<String>> =
-        (if (inLibrary && !app.game) added + app.key else added - app.key) to
-            (if (!inLibrary && app.game) removed + app.key else removed - app.key)
+    private fun listedByDefault(app: HomeApp.LaunchableApp, emulators: Set<String>): Boolean = app.game && app.packageName !in emulators
+
+    fun includes(
+        app: HomeApp.LaunchableApp, added: Set<String> = this.added, removed: Set<String> = this.removed, emulators: Set<String> = this.emulators,
+    ): Boolean = app.key !in removed && (listedByDefault(app, emulators) || app.key in added)
+
+    fun changed(
+        added: Set<String>, removed: Set<String>, app: HomeApp.LaunchableApp, inLibrary: Boolean, emulators: Set<String> = emptySet(),
+    ): Pair<Set<String>, Set<String>> {
+        val default = listedByDefault(app, emulators)
+        return (if (inLibrary && !default) added + app.key else added - app.key) to
+            (if (!inLibrary && default) removed + app.key else removed - app.key)
+    }
 
     fun set(context: Context, app: HomeApp.LaunchableApp, inLibrary: Boolean) {
-        val (a, r) = changed(added, removed, app, inLibrary)
+        val (a, r) = changed(added, removed, app, inLibrary, emulators)
         added = a
         removed = r
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putStringSet(ADDED, a).putStringSet(REMOVED, r).apply()

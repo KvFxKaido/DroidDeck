@@ -174,8 +174,8 @@ internal fun libraryEntries(
 
 internal const val ANDROID_ENTRY = "android:"
 
-internal fun androidEntries(apps: List<HomeApp.LaunchableApp>, added: Set<String>, removed: Set<String>): List<LibraryEntry> =
-    apps.filter { HomeLibrary.includes(it, added, removed) }
+internal fun androidEntries(apps: List<HomeApp.LaunchableApp>, added: Set<String>, removed: Set<String>, emulators: Set<String> = emptySet()): List<LibraryEntry> =
+    apps.filter { HomeLibrary.includes(it, added, removed, emulators) }
         .map { LibraryEntry(ANDROID_ENTRY + it.key, Library.SOURCE_ANDROID, it.label, null, null, installed = true, app = it) }
 
 internal fun romEntries(games: List<AndroidEmulators.Game>): List<LibraryEntry> =
@@ -362,6 +362,7 @@ internal fun LibraryPage(
     remember { HomeLibrary.load(ctx) }
     val androidAdded = HomeLibrary.added
     val androidRemoved = HomeLibrary.removed
+    val androidEmulators = HomeLibrary.emulators
     val androidApps = if (s.shortcutPicker) emptyList() else s.androidApps
     LaunchedEffect(s.romsDir) { AndroidRoms.refresh(ctx, s.romsDir) }
     val roms = if (s.shortcutPicker) emptyList() else AndroidRoms.games
@@ -378,13 +379,13 @@ internal fun LibraryPage(
             else -> a.onAndroidRom(game, target)
         }
     }
-    val all = remember(soundMode, s.steamGames, s.soundtracks, s.soundtracksEnabled, cloudRows, owned, installedStore, savedSnapshot, favoritesLabel, preview, androidApps, androidAdded, androidRemoved, roms) {
+    val all = remember(soundMode, s.steamGames, s.soundtracks, s.soundtracksEnabled, cloudRows, owned, installedStore, savedSnapshot, favoritesLabel, preview, androidApps, androidAdded, androidRemoved, androidEmulators, roms) {
         if (soundMode) s.soundtracks.map { LibraryEntry("sound:${it.appId}", it.source, it.name, it, null, true) } +
             (if (s.soundtracks.isEmpty() && savedSnapshot.favorites.isEmpty() && savedSnapshot.collections.isEmpty()) emptyList() else SoundtrackCollections.games(ctx, favoritesLabel, skipEmptyFavorites = true))
                 .map { LibraryEntry("sound:${it.appId}", it.source, it.name, it, null, true) }
         else libraryEntries(s.steamGames + cloudRows + if (s.soundtracksEnabled) emptyList() else s.soundtracks.filter { it.library != Library.ADDED }, owned, installedStore)
             .let { rows -> if (preview == LibraryPreview.NOTHING_INSTALLED) rows.map { LibraryEntry(it.key, it.source, it.title, it.game, it.item, false) } else rows } +
-            androidEntries(androidApps, androidAdded, androidRemoved) + romEntries(roms)
+            androidEntries(androidApps, androidAdded, androidRemoved, androidEmulators) + romEntries(roms)
     }
     var addingSoundtrack by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { XboxLibraryFilter.load(ctx) }
