@@ -167,6 +167,9 @@ internal fun androidEntries(apps: List<HomeApp.LaunchableApp>, added: Set<String
 internal fun romEntries(games: List<AndroidEmulators.Game>): List<LibraryEntry> =
     games.map { LibraryEntry(it.key, Library.SOURCE_EMULATION, it.title, null, null, installed = true, rom = it) }
 
+internal fun libraryArtWanted(entries: List<LibraryEntry>, romCoversSettled: Boolean): List<LibraryArt.Wanted> =
+    entries.filter { it.app != null || (romCoversSettled && it.rom != null && it.rom.art == null) }.map { LibraryArt.Wanted(it.key, it.title) }
+
 internal fun collectionEntries(all: List<LibraryEntry>, items: List<CatalogItem>, store: Store = Store.ITCH): List<LibraryEntry> {
     val keys = items.map { it.key }.toSet()
     val own = all.filter { it.source == store.id }
@@ -286,6 +289,9 @@ internal fun LibraryPage(
         else libraryEntries(s.steamGames + cloudRows + if (s.soundtracksEnabled) emptyList() else s.soundtracks.filter { it.library != Library.ADDED }, owned, installedStore) +
             androidEntries(androidApps, androidAdded, androidRemoved, androidEmulators) + romEntries(roms)
     }
+    val romCoversSettled = AndroidRoms.coversSettled
+    val artWanted = remember(all, romCoversSettled) { libraryArtWanted(all, romCoversSettled) }
+    LaunchedEffect(artWanted.map { it.key }) { LibraryArt.fetchAll(ctx, artWanted) }
     var addingSoundtrack by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { XboxLibraryFilter.load(ctx) }
     var showUninstalled by remember(LibraryView.ownedRequest) { mutableStateOf(SessionPrefs.libraryShowUninstalled(ctx)) }
