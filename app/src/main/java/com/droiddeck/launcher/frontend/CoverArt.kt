@@ -26,6 +26,7 @@ object CoverArt {
         "dolphin" to listOf("Nintendo_-_GameCube", "Nintendo_-_Wii"),
         "melonds" to listOf("Nintendo_-_Nintendo_DS"),
         "cemu" to listOf("Nintendo_-_Wii_U"),
+        "dreamcast" to listOf("Sega_-_Dreamcast"),
     )
 
     private fun root(context: Context) = File(context.filesDir, "covers")

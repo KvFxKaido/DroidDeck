@@ -28,6 +28,8 @@ import kotlinx.coroutines.withContext
 internal object AndroidRoms {
     private const val PREFS = "home_launcher"
     private const val CHOSEN = "rom_emulators"
+    private const val GAME_CHOSEN = "rom_game_emulators"
+    private const val COVERS_PER_PASS = 40
 
     var games by mutableStateOf<List<AndroidEmulators.Game>>(emptyList())
         private set
@@ -35,13 +37,22 @@ internal object AndroidRoms {
         private set
     var chosen by mutableStateOf<Map<String, String>>(emptyMap())
         private set
+    var gameChosen by mutableStateOf<Map<String, String>>(emptyMap())
+        private set
     private var loaded = false
 
     fun load(context: Context) {
         if (loaded) return
         loaded = true
-        chosen = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getStringSet(CHOSEN, emptySet()).orEmpty()
-            .mapNotNull { it.split('=', limit = 2).takeIf { p -> p.size == 2 }?.let { p -> p[0] to p[1] } }.toMap()
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        fun pairs(name: String) = prefs.getStringSet(name, emptySet()).orEmpty().mapNotNull { it.split('=', limit = 2).takeIf { p -> p.size == 2 } }
+        chosen = pairs(CHOSEN).associate { it[0] to it[1] }
+        gameChosen = pairs(GAME_CHOSEN).associate { it[1] to it[0] }
+    }
+
+    fun chooseForGame(context: Context, game: AndroidEmulators.Game, packageName: String?) {
+        gameChosen = if (packageName == null) gameChosen - game.file.path else gameChosen + (game.file.path to packageName)
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putStringSet(GAME_CHOSEN, gameChosen.map { "${it.value}=${it.key}" }.toSet()).apply()
     }
 
     fun choose(context: Context, system: String, packageName: String) {
@@ -60,10 +71,11 @@ internal object AndroidRoms {
         games = found
         installed = emulators
         if (found.isEmpty() || OfflineMode.enabled(app)) return
-        val fetched = withContext(Dispatchers.IO) {
-            runCatching { CoverArt.fetchMissing(app, found.filter { it.art == null }.mapNotNull { AndroidEmulators.coverRom(it) }) }.getOrDefault(false)
+        val wanted = found.filter { it.art == null }.mapNotNull { AndroidEmulators.coverRom(it) }
+        repeat((wanted.size + COVERS_PER_PASS - 1) / COVERS_PER_PASS) {
+            val fetched = withContext(Dispatchers.IO) { runCatching { CoverArt.fetchMissing(app, wanted) }.getOrDefault(false) }
+            if (fetched) games = withContext(Dispatchers.IO) { withArt(app, found) }
         }
-        if (fetched) games = withContext(Dispatchers.IO) { withArt(app, found) }
     }
 
     private fun withArt(context: Context, games: List<AndroidEmulators.Game>): List<AndroidEmulators.Game> =
@@ -95,6 +107,31 @@ internal fun RomEmulatorDialog(system: String, candidates: List<AndroidEmulators
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.fillMaxWidth()) {
                 for (c in candidates) TextButton(onClick = { onPick(c) }, modifier = Modifier.focusGlide(CircleShape)) { Text(c.label) }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss, modifier = Modifier.focusGlide(CircleShape)) { Text(stringResource(R.string.common_cancel)) } },
+    )
+}
+
+@Composable
+internal fun RomGameDialog(
+    game: AndroidEmulators.Game, candidates: List<AndroidEmulators.Installed>, forGame: String?,
+    onPick: (AndroidEmulators.Installed) -> Unit, onClear: () -> Unit, onSystemDefault: () -> Unit, onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.library_rom_game_emulator, game.title)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.fillMaxWidth()) {
+                for (c in candidates) TextButton(onClick = { onPick(c) }, modifier = Modifier.focusGlide(CircleShape)) {
+                    Text(if (c.packageName == forGame) stringResource(R.string.library_rom_selected, c.label) else c.label)
+                }
+                if (forGame != null) TextButton(onClick = onClear, modifier = Modifier.focusGlide(CircleShape)) {
+                    Text(stringResource(R.string.library_rom_use_default, game.system.name))
+                }
+                if (candidates.size > 1) TextButton(onClick = onSystemDefault, modifier = Modifier.focusGlide(CircleShape)) {
+                    Text(stringResource(R.string.library_rom_change_default, game.system.name))
+                }
             }
         },
         confirmButton = { TextButton(onClick = onDismiss, modifier = Modifier.focusGlide(CircleShape)) { Text(stringResource(R.string.common_cancel)) } },

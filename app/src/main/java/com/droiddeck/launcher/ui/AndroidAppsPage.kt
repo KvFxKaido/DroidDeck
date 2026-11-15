@@ -174,7 +174,7 @@ internal fun Context.findActivity(): Activity? {
     return null
 }
 
-private fun Modifier.menuKey(onMenu: () -> Unit): Modifier = onPreviewKeyEvent { event ->
+internal fun Modifier.menuKey(onMenu: () -> Unit): Modifier = onPreviewKeyEvent { event ->
     val k = event.nativeKeyEvent
     if (k.keyCode != KeyEvent.KEYCODE_BUTTON_Y && k.keyCode != KeyEvent.KEYCODE_MENU) false
     else {
