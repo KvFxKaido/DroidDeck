@@ -9,6 +9,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.hoverable
@@ -365,9 +366,11 @@ internal fun LibraryPage(
     LaunchedEffect(s.romsDir) { AndroidRoms.refresh(ctx, s.romsDir) }
     val roms = if (s.shortcutPicker) emptyList() else AndroidRoms.games
     var choosingRom by remember { mutableStateOf<AndroidEmulators.Game?>(null) }
+    var romMenu by remember { mutableStateOf<AndroidEmulators.Game?>(null) }
+    var romDefault by remember { mutableStateOf<AndroidEmulators.Game?>(null) }
     val openRom: (AndroidEmulators.Game) -> Unit = { game ->
         val candidates = AndroidRoms.installed[game.system.id].orEmpty()
-        val target = AndroidEmulators.pick(candidates, AndroidRoms.chosen[game.system.id])
+        val target = AndroidEmulators.choose(candidates, AndroidRoms.gameChosen[game.file.path], AndroidRoms.chosen[game.system.id])
         when {
             candidates.isEmpty() -> android.widget.Toast.makeText(ctx, ctx.getString(R.string.library_rom_no_emulator, game.system.name), android.widget.Toast.LENGTH_LONG).show()
             target == null -> choosingRom = game
@@ -601,6 +604,13 @@ internal fun LibraryPage(
                 },
                 searchCleared = open != null,
                 onFocus = { gridFocused = it },
+                onMenu = { e ->
+                    val game = e.rom
+                    if (game != null) {
+                        if (AndroidRoms.installed[game.system.id].isNullOrEmpty()) android.widget.Toast.makeText(ctx, ctx.getString(R.string.library_rom_no_emulator, game.system.name), android.widget.Toast.LENGTH_LONG).show()
+                        else romMenu = game
+                    }
+                },
                 soundMode = soundMode,
                 wallArt = { wallTiles(all.filterNot(concealed).mapNotNull { entryArt(it, tall = true) }) },
                 emptyText = when {
@@ -626,6 +636,20 @@ internal fun LibraryPage(
             AndroidRoms.choose(ctx, game.system.id, target.packageName)
             a.onAndroidRom(game, target)
         }) { choosingRom = null }
+    }
+    romMenu?.let { game ->
+        RomGameDialog(
+            game, AndroidRoms.installed[game.system.id].orEmpty(), AndroidRoms.gameChosen[game.file.path],
+            onPick = { target -> romMenu = null; AndroidRoms.chooseForGame(ctx, game, target.packageName) },
+            onClear = { romMenu = null; AndroidRoms.chooseForGame(ctx, game, null) },
+            onSystemDefault = { romMenu = null; romDefault = game },
+        ) { romMenu = null }
+    }
+    romDefault?.let { game ->
+        RomEmulatorDialog(game.system.name, AndroidRoms.installed[game.system.id].orEmpty(), onPick = { target ->
+            romDefault = null
+            AndroidRoms.choose(ctx, game.system.id, target.packageName)
+        }) { romDefault = null }
     }
     if (savedDialog) SavedDialog(emptyList(), onOpen = { id -> onSelect("sound:$id") }) { savedDialog = false }
     if (addingSoundtrack) SyncFolderPicker(stringResource(R.string.soundtracks_add_title), null, onDismiss = { addingSoundtrack = false }) { dir ->
@@ -666,6 +690,7 @@ private fun LibraryGrid(
     soundMode: Boolean = false, emptyText: Int = R.string.stores_nothing_matches, onAddSoundtrack: () -> Unit = {},
     onCollections: () -> Unit = {}, trackHits: List<SoundtrackIndex.Hit> = emptyList(), onPlayHit: (SoundtrackIndex.Hit) -> Unit = {},
     signInStore: Store? = null, wallArt: () -> List<Any> = { emptyList() },
+    onMenu: (LibraryEntry) -> Unit = {},
 ) {
     val listMode = s.storesView == "list"
     val capsules = s.storesView == "capsules"
@@ -1096,8 +1121,9 @@ private fun entryArt(e: LibraryEntry, tall: Boolean): Any? {
     return if (tall) portrait ?: wide else wide ?: portrait
 }
 
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
-private fun LibraryTile(e: LibraryEntry, capsule: Boolean, first: Boolean, navigation: Modifier, choose: (() -> Unit)?, onOpen: (String) -> Unit, showSource: Boolean) {
+private fun LibraryTile(e: LibraryEntry, capsule: Boolean, first: Boolean, navigation: Modifier, choose: (() -> Unit)?, onOpen: (String) -> Unit, showSource: Boolean, menu: (() -> Unit)? = null) {
     val pal = LocalPalette.current
     val src = remember { MutableInteractionSource() }
     val hot = rememberHot(src)
@@ -1120,7 +1146,11 @@ private fun LibraryTile(e: LibraryEntry, capsule: Boolean, first: Boolean, navig
         modifier = Modifier.fillMaxWidth().onGloballyPositioned { placed[0] = it }
             .then(navigation).paneItem("card:${e.key}").then(if (first) Modifier.firstTile().paneEntry() else Modifier).graphicsLayer { scaleX = scale; scaleY = scale }
             .clip(RoundedCornerShape(10.dp)).glideBorder(hot, RoundedCornerShape(10.dp), pal.signal, pal.line)
-            .hoverable(src).clickable(role = Role.Button, interactionSource = src, indication = LocalIndication.current, onClick = open)
+            .hoverable(src)
+            .then(
+                if (menu != null) Modifier.combinedClickable(interactionSource = src, indication = LocalIndication.current, role = Role.Button, onLongClick = menu, onClick = open).menuKey(menu)
+                else Modifier.clickable(role = Role.Button, interactionSource = src, indication = LocalIndication.current, onClick = open),
+            )
             .controllerConfirm(onClick = choose ?: open),
     ) {
         LibraryArt(e, wide, tall, download, hot, capsule, showSource)
@@ -1249,8 +1279,9 @@ internal fun LibraryMarker(e: LibraryEntry, download: DownloadEntry?, showDownlo
 private fun libraryUpdateAvailable(e: LibraryEntry): Boolean = e.storeKey?.let { it in ItchUpdates.available || it in GameJoltUpdates.available || it in com.droiddeck.launcher.stores.ea.EaUpdates.available } == true ||
     e.source == Store.GOG.id && (e.item?.id ?: e.game?.storeId)?.let { GogMaintenance.checks[it]?.state } == GogMaintenance.State.AVAILABLE
 
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
-private fun LibraryRow(e: LibraryEntry, first: Boolean, navigation: Modifier, choose: (() -> Unit)?, onOpen: (String) -> Unit) {
+private fun LibraryRow(e: LibraryEntry, first: Boolean, navigation: Modifier, choose: (() -> Unit)?, onOpen: (String) -> Unit, menu: (() -> Unit)? = null) {
     val colors = MaterialTheme.colorScheme
     val pal = LocalPalette.current
     val src = remember { MutableInteractionSource() }
@@ -1280,7 +1311,11 @@ private fun LibraryRow(e: LibraryEntry, first: Boolean, navigation: Modifier, ch
         modifier = Modifier.fillMaxWidth().heightIn(min = 64.dp).onGloballyPositioned { placed[0] = it }.then(navigation).paneItem("card:${e.key}")
             .then(if (first) Modifier.firstTile().paneEntry() else Modifier)
             .clip(RoundedCornerShape(10.dp)).glideBorder(hot, RoundedCornerShape(10.dp), pal.signal, pal.line)
-            .hoverable(src).clickable(role = Role.Button, interactionSource = src, indication = LocalIndication.current, onClick = open)
+            .hoverable(src)
+            .then(
+                if (menu != null) Modifier.combinedClickable(interactionSource = src, indication = LocalIndication.current, role = Role.Button, onLongClick = menu, onClick = open).menuKey(menu)
+                else Modifier.clickable(role = Role.Button, interactionSource = src, indication = LocalIndication.current, onClick = open),
+            )
             .controllerConfirm(onClick = choose ?: open)
             .padding(horizontal = 10.dp, vertical = 8.dp),
     ) {
