@@ -364,6 +364,7 @@ internal fun LibraryPage(
     val roms = if (s.shortcutPicker) emptyList() else AndroidRoms.games
     var choosingRom by remember { mutableStateOf<AndroidEmulators.Game?>(null) }
     var romMenu by remember { mutableStateOf<AndroidEmulators.Game?>(null) }
+    var appMenu by remember { mutableStateOf<LibraryEntry?>(null) }
     var romDefault by remember { mutableStateOf<AndroidEmulators.Game?>(null) }
     val openRom: (AndroidEmulators.Game) -> Unit = { game ->
         val candidates = AndroidRoms.installed[game.system.id].orEmpty()
@@ -603,7 +604,8 @@ internal fun LibraryPage(
                 onFocus = { gridFocused = it },
                 onMenu = { e ->
                     val game = e.rom
-                    if (game != null) {
+                    if (e.app != null) appMenu = e
+                    else if (game != null) {
                         if (AndroidRoms.installed[game.system.id].isNullOrEmpty()) android.widget.Toast.makeText(ctx, ctx.getString(R.string.library_rom_no_emulator, game.system.name), android.widget.Toast.LENGTH_LONG).show()
                         else romMenu = game
                     }
@@ -633,6 +635,14 @@ internal fun LibraryPage(
             AndroidRoms.choose(ctx, game.system.id, target.packageName)
             a.onAndroidRom(game, target)
         }) { choosingRom = null }
+    }
+    appMenu?.let { entry ->
+        val app = entry.app
+        if (app != null) AndroidEntryDialog(
+            app, favorite = entry.favoriteKey in LibraryFavorites.keys,
+            onFavorite = { appMenu = null; LibraryFavorites.toggle(ctx, entry.favoriteKey) },
+            onRemove = { appMenu = null; HomeLibrary.set(ctx, app, false) },
+        ) { appMenu = null }
     }
     romMenu?.let { game ->
         RomGameDialog(
@@ -766,6 +776,7 @@ private fun LibraryGrid(
         }
         val picker = s.shortcutPicker && e.game != null
         val choose = if (picker) ({ a.onSteamGame(e.game!!) }) else null
+        val menu: (() -> Unit)? = if (e.rom != null || e.app != null) ({ onMenu(e) }) else null
         val enter = remember(source) {
             androidx.compose.animation.core.Animatable(if (Motion.scale == 0f || android.os.SystemClock.uptimeMillis() - switchedAt > 600) 1f else 0f)
         }
@@ -775,7 +786,7 @@ private fun LibraryGrid(
             enter.animateTo(1f, Motion.tw(320))
         }
         Box(Modifier.graphicsLayer { alpha = enter.value; translationY = (1f - enter.value) * 18.dp.toPx() }) {
-            if (listMode) LibraryRow(e, first, navigation, choose, onOpen) else LibraryTile(e, capsules, first, navigation, choose, onOpen, showSource = source == LIBRARY_ALL || source == LIBRARY_FAVORITES || source == LIBRARY_HIDDEN)
+            if (listMode) LibraryRow(e, first, navigation, choose, onOpen, menu) else LibraryTile(e, capsules, first, navigation, choose, onOpen, showSource = source == LIBRARY_ALL || source == LIBRARY_FAVORITES || source == LIBRARY_HIDDEN, menu = menu)
         }
     }
     var rowFocused by remember { mutableStateOf(false) }
