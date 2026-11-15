@@ -80,6 +80,16 @@ class LibraryArtTest {
         assertFalse(LibraryArt.needsFetch(tmp.root, now, keyChangedAt = 0))
     }
 
+    @Test fun aRateLimitPausesFetchingForTenMinutesAndOtherFailuresDoNot() {
+        val now = 1_000_000L
+        val until = LibraryArt.pauseAfter(SteamGridDb.Status.LIMIT, now)
+        assertEquals(now + 10 * 60 * 1000, until)
+        assertFalse(LibraryArt.mayFetch(now + 9 * 60 * 1000, until))
+        assertTrue(LibraryArt.mayFetch(until, until))
+        for (status in listOf(SteamGridDb.Status.OFFLINE, SteamGridDb.Status.SERVER, SteamGridDb.Status.BAD_KEY))
+            assertTrue(LibraryArt.mayFetch(now, LibraryArt.pauseAfter(status, now)))
+    }
+
     @Test fun androidGamesAlwaysWantArtAndRomsOnlyOnceTheirOwnCoversHaveBeenTried() {
         val app = HomeApp.LaunchableApp("Game", "a.game", "a.game.Main", null, game = true)
         val ps2 = AndroidEmulators.systems.first { it.id == "ps2" }

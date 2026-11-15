@@ -1,6 +1,7 @@
 package com.droiddeck.launcher.ui
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import com.droiddeck.launcher.frontend.AddedGameArt
@@ -26,5 +27,9 @@ internal fun LibraryArtChooser(request: LibraryArtRequest, view: String, onClose
     val slot = libraryArtSlot(view)
     val target = remember(request.key) { libraryArtTarget(request.key, request.title) }
     val file = remember(request.key, slot, LibraryArt.version) { LibraryArt.chosen(ctx, request.key, slot) }
+    DisposableEffect(Unit) {
+        LibraryArt.hold()
+        onDispose { LibraryArt.release() }
+    }
     ArtChooserDialog(target, slot, AddedGameArt.SlotState(slot, file, AddedGameArt.SGDB, file != null), onBack = onClose, onCloseAll = onClose) {}
 }

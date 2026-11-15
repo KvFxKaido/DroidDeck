@@ -12,6 +12,7 @@ import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 object LibraryArt {
@@ -20,7 +21,6 @@ object LibraryArt {
     private const val OFF = "auto-off"
     private const val TRIED = "auto-tried"
     private const val RETRY_AFTER_MS = 7L * 24 * 3600 * 1000
-    private const val PER_PASS = 40
     private val SLOTS = setOf(AddedGameArt.Slot.COVER, AddedGameArt.Slot.WIDE)
 
     class Wanted(val key: String, val title: String)
@@ -97,32 +97,55 @@ object LibraryArt {
         return !(tried.isFile && tried.lastModified() >= keyChangedAt && now - tried.lastModified() < RETRY_AFTER_MS)
     }
 
+    private const val ENTRY_PAUSE_MS = 1_000L
+    private const val HOLD_POLL_MS = 1_000L
+    private const val LIMIT_PAUSE_MS = 10L * 60 * 1000
+
+    @Volatile private var pausedUntil = 0L
+    private val held = java.util.concurrent.atomic.AtomicInteger(0)
+    private val pass = kotlinx.coroutines.sync.Mutex()
+
+    fun hold() { held.incrementAndGet() }
+
+    fun release() { held.updateAndGet { maxOf(0, it - 1) } }
+
+    internal fun pauseAfter(status: SteamGridDb.Status?, now: Long): Long = if (status == SteamGridDb.Status.LIMIT) now + LIMIT_PAUSE_MS else 0L
+
+    internal fun mayFetch(now: Long, pausedUntil: Long): Boolean = now >= pausedUntil
+
     suspend fun fetchAll(context: Context, wanted: List<Wanted>) {
         val app = context.applicationContext
         if (wanted.isEmpty() || OfflineMode.enabled(app) || !SessionPrefs.addedGamesArt(app)) return
-        while (withContext(Dispatchers.IO) { fetchMissing(app, wanted) } >= PER_PASS) delay(500)
-    }
-
-    private fun fetchMissing(context: Context, wanted: List<Wanted>): Int {
-        val key = SteamGridDb.key(context)
-        if (key.isEmpty()) return 0
-        val keyChangedAt = SteamGridDb.keyChangedAt(context)
-        var tried = 0
-        for (w in wanted) {
-            if (tried >= PER_PASS) break
-            val dir = dir(context, w.key)
-            if (!needsFetch(dir, System.currentTimeMillis(), keyChangedAt)) continue
-            dir.mkdirs()
-            try {
-                val id = AddedGameArt.remembered(File(dir, "sgdb-id"), keyChangedAt) { SteamGridDb.gameId(key, null, w.title)?.toString() }?.toIntOrNull()
-                if (id != null && SteamGridDb.download(key, id, dir, SLOTS)) changed(w.key)
-                File(dir, TRIED).writeText("")
-                tried++
-            } catch (e: Exception) {
-                Log.w(TAG, "${w.title}: SteamGridDB failed (${e.javaClass.simpleName}); not asking again this pass")
-                return 0
+        pass.withLock {
+            if (!mayFetch(System.currentTimeMillis(), pausedUntil)) return
+            val key = SteamGridDb.key(app)
+            if (key.isEmpty()) return
+            val keyChangedAt = SteamGridDb.keyChangedAt(app)
+            for (w in wanted) {
+                while (held.get() > 0) delay(HOLD_POLL_MS)
+                val dir = dir(app, w.key)
+                if (!withContext(Dispatchers.IO) { needsFetch(dir, System.currentTimeMillis(), keyChangedAt) }) continue
+                val failed = withContext(Dispatchers.IO) { fetchOne(key, keyChangedAt, dir, w) }
+                if (failed != null) {
+                    pausedUntil = pauseAfter(failed, System.currentTimeMillis())
+                    return
+                }
+                delay(ENTRY_PAUSE_MS)
             }
         }
-        return tried
+    }
+
+    private fun fetchOne(key: String, keyChangedAt: Long, dir: File, w: Wanted): SteamGridDb.Status? {
+        dir.mkdirs()
+        return try {
+            val id = AddedGameArt.remembered(File(dir, "sgdb-id"), keyChangedAt) { SteamGridDb.gameId(key, null, w.title)?.toString() }?.toIntOrNull()
+            if (id != null && SteamGridDb.download(key, id, dir, SLOTS)) changed(w.key)
+            File(dir, TRIED).writeText("")
+            null
+        } catch (e: Exception) {
+            val status = (e as? SteamGridDb.Failed)?.status ?: SteamGridDb.Status.SERVER
+            Log.w(TAG, "${w.title}: SteamGridDB failed ($status); stopping this pass")
+            status
+        }
     }
 }
