@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="redmagic_perf_title">Performance mode</string>
+    <string name="redmagic_perf_leave">Leave to REDMAGIC</string>
+    <string name="redmagic_perf_eco">Eco (60 Hz)</string>
+    <string name="redmagic_perf_balance">Balance</string>
+    <string name="redmagic_perf_rise">Rise</string>
+    <string name="redmagic_perf_default">Use the default (%1$s)</string>
+    <string name="redmagic_perf_selected">%1$s (selected)</string>
+    <string name="redmagic_perf_hint">Set while this game runs and put back when the session ends. Diablo stays in the REDMAGIC overlay.</string>
+    <string name="redmagic_perf_unpaired">Needs wireless debugging to be paired. Until then the mode is left to REDMAGIC.</string>
+</resources>

@@ -850,6 +850,11 @@ internal fun LaunchSettings(s: FrontEndState, a: FrontEndActions, host: MenuHost
                 )
             }
         }
+        if (com.droiddeck.launcher.core.RedmagicPerformance.supported(context)) add { m ->
+            RedmagicPerformanceCard(frameGenProfileKey, s.adbPaired, m) { value, onClick ->
+                SettingCard(stringResource(R.string.redmagic_perf_title), value, "card:redmagic-perf", Modifier.fillMaxSize(), onClick)
+            }
+        }
         if (controller != null) add { m -> SettingCard(stringResource(R.string.setup_card_controls), stringResource(R.string.setup_card_controls_hint), "card:controls", m, controller.onMapping) }
         if (steamCard != null) add(steamCard)
         val cardStore = com.droiddeck.launcher.stores.Store.byId(game?.source.orEmpty())?.takeIf { it == com.droiddeck.launcher.stores.Store.EPIC || it == com.droiddeck.launcher.stores.Store.GOG }

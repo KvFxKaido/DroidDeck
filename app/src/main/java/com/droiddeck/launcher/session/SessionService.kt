@@ -2255,6 +2255,7 @@ class SessionService : Service() {
                 releaseLocks()
                 MemoryLog.stop()
                 com.droiddeck.launcher.core.BackgroundAppLimit.restoreAsync(applicationContext)
+                com.droiddeck.launcher.core.RedmagicPerformance.restoreAsync(applicationContext)
                 if (status == 0) {
                     SessionEvents.transition(SessionPhase.IDLE, "session.stopped", mapOf("status" to status))
                 } else {
