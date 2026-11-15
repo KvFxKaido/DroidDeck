@@ -107,6 +107,7 @@ import coil.compose.AsyncImage
 import com.droiddeck.launcher.HomeApp
 import com.droiddeck.launcher.HomeLibrary
 import com.droiddeck.launcher.R
+import com.droiddeck.launcher.frontend.AndroidEmulators
 import com.droiddeck.launcher.frontend.Library
 import com.droiddeck.launcher.frontend.Soundtrack
 import com.droiddeck.launcher.frontend.SoundtrackCollections
@@ -138,7 +139,7 @@ import androidx.compose.runtime.setValue
 internal class LibraryEntry(
     val key: String, val source: String, val title: String,
     val game: Library.SteamGame?, val item: CatalogItem?, val installed: Boolean,
-    val app: HomeApp.LaunchableApp? = null,
+    val app: HomeApp.LaunchableApp? = null, val rom: AndroidEmulators.Game? = null,
 ) {
     val storeKey: String? get() = item?.key ?: game?.storeId?.let { "${game.source}:$it" }
     val favoriteKey: String get() = storeKey ?: key
@@ -173,6 +174,9 @@ internal fun androidEntries(apps: List<HomeApp.LaunchableApp>, added: Set<String
     apps.filter { HomeLibrary.includes(it, added, removed) }
         .map { LibraryEntry(ANDROID_ENTRY + it.key, Library.SOURCE_ANDROID, it.label, null, null, installed = true, app = it) }
 
+internal fun romEntries(games: List<AndroidEmulators.Game>): List<LibraryEntry> =
+    games.map { LibraryEntry(it.key, Library.SOURCE_EMULATION, it.title, null, null, installed = true, rom = it) }
+
 internal fun collectionEntries(all: List<LibraryEntry>, items: List<CatalogItem>, store: Store = Store.ITCH): List<LibraryEntry> {
     val keys = items.map { it.key }.toSet()
     val own = all.filter { it.source == store.id }
@@ -191,7 +195,7 @@ internal fun librarySources(
 ): List<String> {
     val tabs = arrangeStoreTabs(order, offStores)
     val shown = tabs.filter { it.shown }.map { it.store.id }.toSet() + LIBRARY_OWN_TABS - offTabs
-    return (placeLibraryTabs(tabs.map { it.store.id }, places).filter { it in shown } + Library.SOURCE_ANDROID + Library.SOURCE_COLLECTION)
+    return (placeLibraryTabs(tabs.map { it.store.id }, places).filter { it in shown } + Library.SOURCE_ANDROID + Library.SOURCE_EMULATION + Library.SOURCE_COLLECTION)
         .filter { source ->
             when (source) {
                 LIBRARY_HIDDEN -> true
@@ -355,13 +359,25 @@ internal fun LibraryPage(
     val androidAdded = HomeLibrary.added
     val androidRemoved = HomeLibrary.removed
     val androidApps = if (s.shortcutPicker) emptyList() else s.androidApps
-    val all = remember(soundMode, s.steamGames, s.soundtracks, s.soundtracksEnabled, cloudRows, owned, installedStore, savedSnapshot, favoritesLabel, preview, androidApps, androidAdded, androidRemoved) {
+    LaunchedEffect(s.romsDir) { AndroidRoms.refresh(ctx, s.romsDir) }
+    val roms = if (s.shortcutPicker) emptyList() else AndroidRoms.games
+    var choosingRom by remember { mutableStateOf<AndroidEmulators.Game?>(null) }
+    val openRom: (AndroidEmulators.Game) -> Unit = { game ->
+        val candidates = AndroidRoms.installed[game.system.id].orEmpty()
+        val target = AndroidEmulators.pick(candidates, AndroidRoms.chosen[game.system.id])
+        when {
+            candidates.isEmpty() -> android.widget.Toast.makeText(ctx, ctx.getString(R.string.library_rom_no_emulator, game.system.name), android.widget.Toast.LENGTH_LONG).show()
+            target == null -> choosingRom = game
+            else -> a.onAndroidRom(game, target)
+        }
+    }
+    val all = remember(soundMode, s.steamGames, s.soundtracks, s.soundtracksEnabled, cloudRows, owned, installedStore, savedSnapshot, favoritesLabel, preview, androidApps, androidAdded, androidRemoved, roms) {
         if (soundMode) s.soundtracks.map { LibraryEntry("sound:${it.appId}", it.source, it.name, it, null, true) } +
             (if (s.soundtracks.isEmpty() && savedSnapshot.favorites.isEmpty() && savedSnapshot.collections.isEmpty()) emptyList() else SoundtrackCollections.games(ctx, favoritesLabel, skipEmptyFavorites = true))
                 .map { LibraryEntry("sound:${it.appId}", it.source, it.name, it, null, true) }
         else libraryEntries(s.steamGames + cloudRows + if (s.soundtracksEnabled) emptyList() else s.soundtracks.filter { it.library != Library.ADDED }, owned, installedStore)
             .let { rows -> if (preview == LibraryPreview.NOTHING_INSTALLED) rows.map { LibraryEntry(it.key, it.source, it.title, it.game, it.item, false) } else rows } +
-            androidEntries(androidApps, androidAdded, androidRemoved)
+            androidEntries(androidApps, androidAdded, androidRemoved) + romEntries(roms)
     }
     var addingSoundtrack by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { XboxLibraryFilter.load(ctx) }
@@ -481,7 +497,7 @@ internal fun LibraryPage(
     val sorted = sortGames(
         candidates, sort, title = { it.title }, releaseDate = { it.item?.releaseDate.orEmpty() },
         lastPlayed = { e -> entryTime(e.game?.lastPlayed, e.storeKey?.let { lastPlayed[it] }) },
-        installedAt = { e -> entryTime(e.storeKey?.let { installedAt[it] }, e.game?.installedAt ?: e.app?.installedAt) },
+        installedAt = { e -> entryTime(e.storeKey?.let { installedAt[it] }, e.game?.installedAt ?: e.app?.installedAt ?: e.rom?.modified) },
         size = { e -> sizeOf(e) ?: 0L },
     )
     var stable by remember { mutableStateOf(emptyList<LibraryEntry>()) }
@@ -568,10 +584,13 @@ internal fun LibraryPage(
                     cycled++
                 },
                 onOpen = { key ->
-                    val app = all.firstOrNull { it.key == key }?.app
+                    val entry = all.firstOrNull { it.key == key }
+                    val app = entry?.app
+                    val rom = entry?.rom
                     // A preview is read-only: a game's page would act on the real install behind the pretend one.
                     if (preview != LibraryPreview.OFF) android.widget.Toast.makeText(ctx, R.string.dev_preview_read_only, android.widget.Toast.LENGTH_SHORT).show()
                     else if (app != null) onAndroidApp(app)
+                    else if (rom != null) openRom(rom)
                     else {
                         focusManager.clearFocus(force = true)
                         onSelect(key)
@@ -597,6 +616,13 @@ internal fun LibraryPage(
     ) { key ->
         if (soundMode || (!s.soundtracksEnabled && s.soundtracks.any { GameRef.key(it) == key })) SoundtrackDetail(key, s, a, lead, backLabel, onBack = back)
         else GameDetail(key, s, a, lead, backLabel, hopRail = "games", onBack = back)
+    }
+    choosingRom?.let { game ->
+        RomEmulatorDialog(game.system.name, AndroidRoms.installed[game.system.id].orEmpty(), onPick = { target ->
+            choosingRom = null
+            AndroidRoms.choose(ctx, game.system.id, target.packageName)
+            a.onAndroidRom(game, target)
+        }) { choosingRom = null }
     }
     if (savedDialog) SavedDialog(emptyList(), onOpen = { id -> onSelect("sound:$id") }) { savedDialog = false }
     if (addingSoundtrack) SyncFolderPicker(stringResource(R.string.soundtracks_add_title), null, onDismiss = { addingSoundtrack = false }) { dir ->
@@ -1026,7 +1052,7 @@ private fun sourceDot(src: String): Color? {
         )
         src == LIBRARY_FAVORITES -> FavoritesColours.dot
         src == LIBRARY_HIDDEN -> HIDDEN_DOT
-        src == Library.SOURCE_STEAM || src == Library.ADDED || src == Library.SOURCE_ANDROID || src == Library.SOURCE_COLLECTION -> sourceColours(src).dot
+        src == Library.SOURCE_STEAM || src == Library.ADDED || src == Library.SOURCE_ANDROID || src == Library.SOURCE_EMULATION || src == Library.SOURCE_COLLECTION -> sourceColours(src).dot
         else -> null
     }
 }
@@ -1053,6 +1079,7 @@ internal fun ManageStoresChip() {
 
 private fun entryArt(e: LibraryEntry, tall: Boolean): Any? {
     if (e.app != null) return e.app.icon
+    if (e.rom != null) return e.rom.art
     val inst = e.storeKey?.let { k -> StoresState.installed.firstOrNull { it.key == k } }
     val wide: Any? = e.game?.hero ?: e.item?.imageUrl ?: inst?.sidecar?.hero ?: inst?.sidecar?.cover
     val portrait: Any? = e.game?.art ?: e.item?.tallImageUrl ?: inst?.sidecar?.cover
@@ -1074,7 +1101,7 @@ private fun LibraryTile(e: LibraryEntry, capsule: Boolean, first: Boolean, navig
     RequestSize(e)
     val open = {
         val art = if (capsule) tall else wide
-        if (e.app == null) placed[0]?.takeIf { it.isAttached }?.let {
+        if (e.app == null && e.rom == null) placed[0]?.takeIf { it.isAttached }?.let {
             StoresMotion.markCard(CardMark(e.key, it.boundsInRoot(), corner, (art as? java.io.File)?.path ?: art as? String, (wide as? java.io.File)?.path ?: wide as? String))
         }
         onOpen(e.key)
@@ -1215,7 +1242,7 @@ private fun LibraryRow(e: LibraryEntry, first: Boolean, navigation: Modifier, ch
     val corner = with(androidx.compose.ui.platform.LocalDensity.current) { 10.dp.toPx() }
     val wide = entryArt(e, tall = false)
     val open = {
-        if (e.app == null) placed[0]?.takeIf { it.isAttached }?.let { StoresMotion.markCard(CardMark(e.key, it.boundsInRoot(), corner, (wide as? java.io.File)?.path ?: wide as? String)) }
+        if (e.app == null && e.rom == null) placed[0]?.takeIf { it.isAttached }?.let { StoresMotion.markCard(CardMark(e.key, it.boundsInRoot(), corner, (wide as? java.io.File)?.path ?: wide as? String)) }
         onOpen(e.key)
     }
     RequestSize(e)

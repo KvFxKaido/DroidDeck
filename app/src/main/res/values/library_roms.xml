@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="source_emulation">Emulation</string>
+    <string name="library_rom_choose_emulator">Open %1$s games with</string>
+    <string name="library_rom_no_emulator">No installed Android emulator opens %1$s games here yet</string>
+    <string name="library_rom_grant_folder">Choose your ROMs folder so the emulator can read the game</string>
+    <string name="library_rom_folder_missing">That folder does not contain this game</string>
+    <string name="library_rom_open_failed">%1$s could not open this game</string>
+</resources>
