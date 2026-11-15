@@ -2,6 +2,10 @@
 <resources>
     <string name="source_emulation">Emulation</string>
     <string name="library_rom_choose_emulator">Open %1$s games with</string>
+    <string name="library_rom_game_emulator">Open %1$s with</string>
+    <string name="library_rom_selected">%1$s (selected)</string>
+    <string name="library_rom_use_default">Use the %1$s default</string>
+    <string name="library_rom_change_default">Change the %1$s default</string>
     <string name="library_rom_no_emulator">No installed Android emulator opens %1$s games here yet</string>
     <string name="library_rom_grant_folder">Choose your ROMs folder so the emulator can read the game</string>
     <string name="library_rom_folder_missing">That folder does not contain this game</string>

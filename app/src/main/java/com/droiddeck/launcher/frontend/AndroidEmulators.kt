@@ -27,20 +27,23 @@ object AndroidEmulators {
 
     val systems = listOf(
         System("psp", "PSP", listOf("psp"), setOf("iso", "cso", "chd", "pbp"), coverId = "ppsspp"),
+        System("ps1", "PS1", listOf("ps1", "psx"), setOf("cue", "chd", "pbp", "m3u"), coverId = "duckstation"),
         System("ps2", "PS2", listOf("ps2"), setOf("iso", "chd", "cso", "gz"), coverId = "armsx2", trackOfSheet = true),
         System("gc", "GameCube", listOf("gc", "gamecube", "ngc"), setOf("iso", "rvz", "gcz", "ciso"), coverId = "dolphin"),
         System("wii", "Wii", listOf("wii"), setOf("iso", "rvz", "gcz", "wbfs", "ciso"), coverId = "dolphin"),
         System("wiiu", "Wii U", listOf("wiiu", "wii u"), setOf("wua", "wud", "wux"), coverId = "cemu"),
-        System("dreamcast", "Dreamcast", listOf("dreamcast", "dc"), setOf("gdi", "cdi", "chd", "cue")),
+        System("dreamcast", "Dreamcast", listOf("dreamcast", "dc"), setOf("gdi", "cdi", "chd", "cue"), coverId = "dreamcast"),
         System("switch", "Switch", listOf("switch"), setOf("nsp", "xci")),
     )
 
     private const val DOLPHIN = "org.dolphinemu.dolphinemu"
     private const val AETHER = "xyz.aethersx2.android"
+    private const val DUCKSTATION = "com.github.stenzek.duckstation"
 
     val recipes = listOf(
         Recipe("psp", "PPSSPP", "org.ppsspp.ppsspp", "org.ppsspp.ppsspp.PpssppActivity", ACTION_VIEW, data = true),
         Recipe("psp", "PPSSPP Gold", "org.ppsspp.ppssppgold", "org.ppsspp.ppsspp.PpssppActivity", ACTION_VIEW, data = true),
+        Recipe("ps1", "DuckStation", DUCKSTATION, "$DUCKSTATION.EmulationActivity", ACTION_MAIN, extra = "bootPath"),
         Recipe("ps2", "AetherSX2", AETHER, "$AETHER.EmulationActivity", ACTION_MAIN, extra = "bootPath"),
         Recipe("ps2", "AetherSX2", "xyz.aethersx2.tturnip", "$AETHER.EmulationActivity", ACTION_MAIN, extra = "bootPath"),
         Recipe("gc", "Dolphin", DOLPHIN, "$DOLPHIN.ui.main.MainActivity", ACTION_VIEW, extra = "AutoStartFile"),
@@ -139,4 +142,7 @@ object AndroidEmulators {
 
     fun pick(candidates: List<Installed>, chosen: String?): Installed? =
         candidates.firstOrNull { it.packageName == chosen } ?: candidates.singleOrNull()
+
+    fun choose(candidates: List<Installed>, forGame: String?, forSystem: String?): Installed? =
+        candidates.firstOrNull { it.packageName == forGame } ?: pick(candidates, forSystem)
 }

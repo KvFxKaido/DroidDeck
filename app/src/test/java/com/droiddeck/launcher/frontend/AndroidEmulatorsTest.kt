@@ -68,6 +68,39 @@ class AndroidEmulatorsTest {
         assertEquals("Gradius V", game.title)
     }
 
+    @Test fun ps1DiscsAreListedByTheirSheetOrPlaylistAndNeverByTrack() {
+        file("PS1/bios/scph1001.bin")
+        file("PS1/Games/Crash/Crash.cue", "FILE \"Crash (Track 1).bin\" BINARY\n  TRACK 01 MODE2/2352\nFILE \"Crash (Track 2).bin\" BINARY\n  TRACK 02 AUDIO\n")
+        file("PS1/Games/Crash/Crash (Track 1).bin")
+        file("PS1/Games/Crash/Crash (Track 2).bin")
+        file("PS1/Games/FF7/FF7.m3u", "FF7 (Disc 1).cue\nFF7 (Disc 2).cue\n")
+        file("PS1/Games/FF7/FF7 (Disc 1).cue", "FILE \"FF7 (Disc 1).bin\" BINARY\n")
+        file("PS1/Games/FF7/FF7 (Disc 2).cue", "FILE \"FF7 (Disc 2).bin\" BINARY\n")
+        file("PS1/Games/FF7/FF7 (Disc 1).bin")
+        file("PS1/Games/FF7/FF7 (Disc 2).bin")
+        assertEquals(listOf("ps1:PS1/Games/Crash/Crash.cue", "ps1:PS1/Games/FF7/FF7.m3u"), found())
+    }
+
+    @Test fun duckStationGetsTheDiscInBootPath() {
+        val launch = AndroidEmulators.launch(target("ps1", "DuckStation"), link, path)
+        assertEquals("com.github.stenzek.duckstation", launch.packageName)
+        assertEquals("com.github.stenzek.duckstation.EmulationActivity", launch.activity)
+        assertEquals(AndroidEmulators.ACTION_MAIN, launch.action)
+        assertNull(launch.data)
+        assertEquals(mapOf("bootPath" to link), launch.extras)
+    }
+
+    @Test fun aGameChoiceBeatsTheSystemChoiceAndFallsBackWhenItsEmulatorIsGone() {
+        val a = target("ps2", "AetherSX2", "xyz.aethersx2.android")
+        val b = target("ps2", "AetherSX2", "xyz.aethersx2.tturnip")
+        val both = listOf(a, b)
+        assertEquals(b, AndroidEmulators.choose(both, forGame = b.packageName, forSystem = a.packageName))
+        assertEquals(a, AndroidEmulators.choose(both, forGame = null, forSystem = a.packageName))
+        assertEquals(a, AndroidEmulators.choose(both, forGame = "uninstalled.package", forSystem = a.packageName))
+        assertNull(AndroidEmulators.choose(both, forGame = null, forSystem = null))
+        assertEquals(a, AndroidEmulators.choose(listOf(a), forGame = b.packageName, forSystem = null))
+    }
+
     @Test fun aSharedStoragePathBecomesADocumentUnderTheGrantedFolder() {
         assertEquals("primary:Emulators/PS2/Games/Game.iso", AndroidEmulators.documentId(path))
         assertEquals("primary:Emulators", AndroidEmulators.documentId("/sdcard/Emulators/"))
