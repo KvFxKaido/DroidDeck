@@ -314,6 +314,7 @@ class FrontEndActions(
     val onIntegrationAppInfo: () -> Unit = {},
     val onIntegrationLocation: () -> Unit = {},
     val onAndroidApp: (HomeApp.LaunchableApp, Int?) -> Unit = { _, _ -> },
+    val onAndroidRom: (com.droiddeck.launcher.frontend.AndroidEmulators.Game, com.droiddeck.launcher.frontend.AndroidEmulators.Installed) -> Unit = { _, _ -> },
     val onBackActionsInverted: (Boolean) -> Unit = {},
     val onRefreshPhantomStatus: () -> Unit = {},
     val onOpenDeveloperOptions: (Int?) -> Unit = {},
