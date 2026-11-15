@@ -676,7 +676,7 @@ internal fun TextEntryDialog(title: String, initial: String, onDismiss: () -> Un
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun ArtChooserDialog(
+internal fun ArtChooserDialog(
     target: ArtTarget, slot: AddedGameArt.Slot, current: AddedGameArt.SlotState?,
     onBack: () -> Unit, onCloseAll: () -> Unit, onChanged: () -> Unit,
 ) {

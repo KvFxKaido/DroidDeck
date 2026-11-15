@@ -118,7 +118,7 @@ internal fun RomEmulatorDialog(system: String, candidates: List<AndroidEmulators
 @Composable
 internal fun RomGameDialog(
     game: AndroidEmulators.Game, candidates: List<AndroidEmulators.Installed>, forGame: String?,
-    onPick: (AndroidEmulators.Installed) -> Unit, onClear: () -> Unit, onSystemDefault: () -> Unit, onDismiss: () -> Unit,
+    onPick: (AndroidEmulators.Installed) -> Unit, onClear: () -> Unit, onSystemDefault: () -> Unit, onArt: () -> Unit, onDismiss: () -> Unit,
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -134,6 +134,7 @@ internal fun RomGameDialog(
                 if (candidates.size > 1) TextButton(onClick = onSystemDefault, modifier = Modifier.focusGlide(CircleShape)) {
                     Text(stringResource(R.string.library_rom_change_default, game.system.name))
                 }
+                TextButton(onClick = onArt, modifier = Modifier.focusGlide(CircleShape)) { Text(stringResource(R.string.library_art_change)) }
             }
         },
         confirmButton = { TextButton(onClick = onDismiss, modifier = Modifier.focusGlide(CircleShape)) { Text(stringResource(R.string.common_cancel)) } },

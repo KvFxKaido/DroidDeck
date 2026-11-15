@@ -110,6 +110,7 @@ import com.droiddeck.launcher.HomeLibrary
 import com.droiddeck.launcher.R
 import com.droiddeck.launcher.frontend.AndroidEmulators
 import com.droiddeck.launcher.frontend.Library
+import com.droiddeck.launcher.frontend.LibraryArt
 import com.droiddeck.launcher.frontend.Soundtrack
 import com.droiddeck.launcher.frontend.SoundtrackCollections
 import com.droiddeck.launcher.frontend.SoundtrackIndex
@@ -366,6 +367,7 @@ internal fun LibraryPage(
     var choosingRom by remember { mutableStateOf<AndroidEmulators.Game?>(null) }
     var romMenu by remember { mutableStateOf<AndroidEmulators.Game?>(null) }
     var appMenu by remember { mutableStateOf<LibraryEntry?>(null) }
+    var artFor by remember { mutableStateOf<LibraryArtRequest?>(null) }
     var romDefault by remember { mutableStateOf<AndroidEmulators.Game?>(null) }
     val openRom: (AndroidEmulators.Game) -> Unit = { game ->
         val candidates = AndroidRoms.installed[game.system.id].orEmpty()
@@ -612,7 +614,7 @@ internal fun LibraryPage(
                     }
                 },
                 soundMode = soundMode,
-                wallArt = { wallTiles(all.filterNot(concealed).mapNotNull { entryArt(it, tall = true) }) },
+                wallArt = { wallTiles(all.filterNot(concealed).mapNotNull { entryArt(ctx, it, tall = true) }) },
                 emptyText = when {
                     soundMode && all.isEmpty() -> R.string.soundtracks_empty
                     !soundMode && all.isEmpty() && source == LIBRARY_ALL -> R.string.games_empty
@@ -637,12 +639,14 @@ internal fun LibraryPage(
             a.onAndroidRom(game, target)
         }) { choosingRom = null }
     }
+    artFor?.let { request -> LibraryArtChooser(request, s.storesView) { artFor = null } }
     appMenu?.let { entry ->
         val app = entry.app
         if (app != null) AndroidEntryDialog(
             app, favorite = entry.favoriteKey in LibraryFavorites.keys,
             onFavorite = { appMenu = null; LibraryFavorites.toggle(ctx, entry.favoriteKey) },
             onRemove = { appMenu = null; HomeLibrary.set(ctx, app, false) },
+            onArt = { appMenu = null; artFor = LibraryArtRequest(entry.key, entry.title) },
         ) { appMenu = null }
     }
     romMenu?.let { game ->
@@ -651,6 +655,7 @@ internal fun LibraryPage(
             onPick = { target -> romMenu = null; AndroidRoms.chooseForGame(ctx, game, target.packageName) },
             onClear = { romMenu = null; AndroidRoms.chooseForGame(ctx, game, null) },
             onSystemDefault = { romMenu = null; romDefault = game },
+            onArt = { romMenu = null; artFor = LibraryArtRequest(game.key, game.title) },
         ) { romMenu = null }
     }
     romDefault?.let { game ->
@@ -1114,9 +1119,9 @@ internal fun ManageStoresChip() {
     ) { Icon(Icons.Filled.Tune, label, tint = if (hot) colors.onBackground else colors.onSurfaceVariant, modifier = Modifier.size(20.dp)) }
 }
 
-private fun entryArt(e: LibraryEntry, tall: Boolean): Any? {
-    if (e.app != null) return e.app.icon
-    if (e.rom != null) return e.rom.art
+private fun entryArt(context: android.content.Context, e: LibraryEntry, tall: Boolean): Any? {
+    if (e.app != null) return LibraryArt.art(context, e.key, tall) ?: e.app.icon
+    if (e.rom != null) return LibraryArt.art(context, e.key, tall) ?: e.rom.art
     val inst = e.storeKey?.let { k -> StoresState.installed.firstOrNull { it.key == k } }
     val wide: Any? = e.game?.hero ?: e.item?.imageUrl ?: inst?.sidecar?.hero ?: inst?.sidecar?.cover
     val portrait: Any? = e.game?.art ?: e.item?.tallImageUrl ?: inst?.sidecar?.cover
@@ -1134,8 +1139,9 @@ private fun LibraryTile(e: LibraryEntry, capsule: Boolean, first: Boolean, navig
     val download = e.storeKey?.let { StoresState.download(it) }?.takeIf { it.isActive }
     val placed = remember { arrayOfNulls<androidx.compose.ui.layout.LayoutCoordinates>(1) }
     val corner = with(androidx.compose.ui.platform.LocalDensity.current) { 10.dp.toPx() }
-    val wide = entryArt(e, tall = false)
-    val tall = entryArt(e, tall = true)
+    val artContext = LocalContext.current
+    val wide = entryArt(artContext, e, tall = false)
+    val tall = entryArt(artContext, e, tall = true)
     RequestSize(e)
     val open = {
         val art = if (capsule) tall else wide
@@ -1174,7 +1180,7 @@ private fun LibraryArt(e: LibraryEntry, wide: Any?, tall: Any?, download: Downlo
     ArtCard(
         e.title, wide, tall, download, hot, capsule, chip,
         badge = if (showSource) ({ SourceChip(e.source, small = true, modifier = Modifier.align(Alignment.TopStart).padding(6.dp), label = favoritesBadge(e), colours = favoritesColours(e)) }) else null,
-        inset = e.app != null,
+        inset = (if (capsule) tall ?: wide else wide ?: tall) is android.graphics.Bitmap,
     ) { LibrarySize(e) }
 }
 
@@ -1283,7 +1289,7 @@ private fun LibraryRow(e: LibraryEntry, first: Boolean, navigation: Modifier, ch
     val download = e.storeKey?.let { StoresState.download(it) }?.takeIf { it.isActive }
     val placed = remember { arrayOfNulls<androidx.compose.ui.layout.LayoutCoordinates>(1) }
     val corner = with(androidx.compose.ui.platform.LocalDensity.current) { 10.dp.toPx() }
-    val wide = entryArt(e, tall = false)
+    val wide = entryArt(LocalContext.current, e, tall = false)
     val open = {
         if (e.app == null && e.rom == null) placed[0]?.takeIf { it.isAttached }?.let { StoresMotion.markCard(CardMark(e.key, it.boundsInRoot(), corner, (wide as? java.io.File)?.path ?: wide as? String)) }
         onOpen(e.key)
@@ -1314,7 +1320,7 @@ private fun LibraryRow(e: LibraryEntry, first: Boolean, navigation: Modifier, ch
             .padding(horizontal = 10.dp, vertical = 8.dp),
     ) {
         Box(Modifier.width(96.dp).height(54.dp).clip(RoundedCornerShape(8.dp)).background(artBrush(hueOf(e.title))).graphicsLayer { alpha = if (e.installed || download != null) 1f else 0.55f }) {
-            if (wide != null) AsyncImage(model = wide, contentDescription = null, contentScale = if (e.app != null) ContentScale.Fit else ContentScale.Crop, modifier = Modifier.matchParentSize())
+            if (wide != null) AsyncImage(model = wide, contentDescription = null, contentScale = if (wide is android.graphics.Bitmap) ContentScale.Fit else ContentScale.Crop, modifier = Modifier.matchParentSize())
         }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
             Text(e.title, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = colors.onBackground, maxLines = 1, overflow = TextOverflow.Ellipsis)

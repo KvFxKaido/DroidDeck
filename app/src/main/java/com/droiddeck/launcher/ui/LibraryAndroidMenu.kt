@@ -15,7 +15,7 @@ import com.droiddeck.launcher.HomeApp
 import com.droiddeck.launcher.R
 
 @Composable
-internal fun AndroidEntryDialog(app: HomeApp.LaunchableApp, favorite: Boolean, onFavorite: () -> Unit, onRemove: () -> Unit, onDismiss: () -> Unit) {
+internal fun AndroidEntryDialog(app: HomeApp.LaunchableApp, favorite: Boolean, onFavorite: () -> Unit, onRemove: () -> Unit, onArt: () -> Unit, onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(app.label) },
@@ -24,6 +24,7 @@ internal fun AndroidEntryDialog(app: HomeApp.LaunchableApp, favorite: Boolean, o
                 TextButton(onClick = onFavorite, modifier = Modifier.focusGlide(CircleShape)) {
                     Text(stringResource(if (favorite) R.string.fm_favorite_remove else R.string.fm_favorite_add))
                 }
+                TextButton(onClick = onArt, modifier = Modifier.focusGlide(CircleShape)) { Text(stringResource(R.string.library_art_change)) }
                 TextButton(onClick = onRemove, modifier = Modifier.focusGlide(CircleShape)) { Text(stringResource(R.string.library_android_remove)) }
             }
         },
