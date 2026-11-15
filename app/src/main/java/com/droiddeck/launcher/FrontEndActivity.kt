@@ -261,6 +261,14 @@ class FrontEndActivity : ComponentActivity(), com.droiddeck.launcher.ui.AgentPet
         refreshWifiDiscovery()
     }
 
+    private var pendingRom: Pair<com.droiddeck.launcher.frontend.AndroidEmulators.Game, com.droiddeck.launcher.frontend.AndroidEmulators.Installed>? = null
+    private val pickRomTree = registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+        val pending = pendingRom
+        pendingRom = null
+        if (uri == null || pending == null) return@registerForActivityResult
+        runCatching { contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
+        launchAndroidRom(pending.first, pending.second, asked = true)
+    }
     private val pickComponent = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { r ->
         if (r.resultCode == RESULT_OK) InAppFilePicker.pickedUri(r.data)?.let { importComponent(it) }
     }
@@ -1719,6 +1727,7 @@ class FrontEndActivity : ComponentActivity(), com.droiddeck.launcher.ui.AgentPet
                         },
                         onAppIconsChanged = { refreshAndroidApps() },
                         onAndroidApp = { app, displayId -> launchAndroidApp(app, displayId) },
+                        onAndroidRom = { game, target -> launchAndroidRom(game, target) },
                         onBackActionsInverted = { inverted ->
                             SessionPrefs.setBackActionsInverted(this, inverted)
                             backActionsInverted = inverted
@@ -2255,6 +2264,41 @@ class FrontEndActivity : ComponentActivity(), com.droiddeck.launcher.ui.AgentPet
                 else -> getString(R.string.android_app_open_failed_display, app.label, displayId)
             }
             android.widget.Toast.makeText(this, message, android.widget.Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun launchAndroidRom(
+        game: com.droiddeck.launcher.frontend.AndroidEmulators.Game, target: com.droiddeck.launcher.frontend.AndroidEmulators.Installed, asked: Boolean = false,
+    ) {
+        val emulators = com.droiddeck.launcher.frontend.AndroidEmulators
+        val documentId = emulators.documentId(game.file.path)
+        val tree = contentResolver.persistedUriPermissions.filter { it.isReadPermission && it.uri.authority == emulators.STORAGE_AUTHORITY }
+            .mapNotNull { grant -> runCatching { android.provider.DocumentsContract.getTreeDocumentId(grant.uri) }.getOrNull()?.let { grant.uri to it } }
+            .firstOrNull { documentId != null && emulators.covers(it.second, documentId) }
+        if (tree == null || documentId == null) {
+            if (asked || documentId == null) {
+                android.widget.Toast.makeText(this, R.string.library_rom_folder_missing, android.widget.Toast.LENGTH_LONG).show()
+                return
+            }
+            pendingRom = game to target
+            android.widget.Toast.makeText(this, R.string.library_rom_grant_folder, android.widget.Toast.LENGTH_LONG).show()
+            val start = emulators.documentId(SessionPrefs.romsDir(this))?.let { android.provider.DocumentsContract.buildDocumentUri(emulators.STORAGE_AUTHORITY, it) }
+            runCatching { pickRomTree.launch(start) }.onFailure { pendingRom = null }
+            return
+        }
+        val launch = emulators.launch(target, emulators.documentUri(tree.second, documentId), game.file.path)
+        val document = android.net.Uri.parse(emulators.documentUri(tree.second, documentId))
+        val intent = Intent(launch.action).setComponent(android.content.ComponentName(launch.packageName, launch.activity))
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        if (launch.data != null) intent.data = document else intent.clipData = android.content.ClipData.newRawUri(null, document)
+        for ((name, value) in launch.extras) intent.putExtra(name, value)
+        try {
+            runCatching { grantUriPermission(launch.packageName, tree.first, Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PREFIX_URI_PERMISSION) }
+            if (!SessionPrefs.soundtracksIngame(this)) com.droiddeck.launcher.playback.SoundtrackController.pause(this)
+            startActivity(intent)
+        } catch (e: Exception) {
+            android.util.Log.w("AndroidRoms", "${launch.packageName}/${launch.activity}: $e")
+            android.widget.Toast.makeText(this, getString(R.string.library_rom_open_failed, target.label), android.widget.Toast.LENGTH_LONG).show()
         }
     }
 

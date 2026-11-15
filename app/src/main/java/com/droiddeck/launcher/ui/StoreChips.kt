@@ -41,6 +41,7 @@ internal fun sourceColours(source: String): SourceColours = when (source) {
     Library.SOURCE_STEAM -> SourceColours(Color(0xFF16293D), Color(0xFF7CC4FF), Color(0xFF1A9FFF))
     Library.SOURCE_COLLECTION -> SourceColours(Color(0xFF2B1A3D), Color(0xFFD2A8FF), Color(0xFFA25BFF))
     Library.SOURCE_ANDROID -> SourceColours(Color(0xFF10301F), Color(0xFFA6F0C6), Color(0xFF3DDC84))
+    Library.SOURCE_EMULATION -> SourceColours(Color(0xFF0D2F36), Color(0xFFA5E8F2), Color(0xFF4DD0E1))
     FLATHUB -> SourceColours(Color(0xFF0B2E2B), Color(0xFF9FE3DD), FlathubTeal)
     else -> SourceColours(Color(0xFF1A1D22), Color(0xFF9AA3AF), Color(0xFF9AA3AF))
 }
@@ -50,6 +51,7 @@ internal fun sourceLabel(source: String): String = when (source) {
     Library.SOURCE_STEAM -> stringResource(R.string.source_steam)
     Library.SOURCE_COLLECTION -> stringResource(R.string.soundtracks_collections)
     Library.SOURCE_ANDROID -> stringResource(R.string.source_android)
+    Library.SOURCE_EMULATION -> stringResource(R.string.source_emulation)
     Store.GOG.id -> Store.GOG.label
     Store.EPIC.id -> Store.EPIC.label
     Store.AMAZON.id -> Store.AMAZON.label

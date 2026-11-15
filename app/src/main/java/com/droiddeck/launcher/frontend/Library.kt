@@ -41,6 +41,7 @@ object Library {
     const val SOURCE_STEAM = "steam"
     const val SOURCE_COLLECTION = "collection"
     const val SOURCE_ANDROID = "android"
+    const val SOURCE_EMULATION = "emulation"
 
     class Rom(val name: String, val hostPath: File, val guestPath: String, val emulatorId: String, val art: File? = null)
     class Emulator(val id: String, val name: String, val system: String, val program: String, val installed: Boolean, val games: List<Rom>) {
@@ -337,7 +338,7 @@ object Library {
         Spec("ppsspp", "PPSSPP", "PSP", "/usr/local/bin/PPSSPPSDL", listOf("psp"), setOf("iso", "cso", "pbp", "chd")),
         Spec("retroarch", "RetroArch", "many systems", "/usr/bin/retroarch", emptyList(), emptySet()),
     )
-    private fun displayTitle(name: String): String =
+    internal fun displayTitle(name: String): String =
         name.replace(Regex("\\s*[(\\[][^)\\]]*[)\\]]"), "").trim().ifEmpty { name }
 
     private val systemFolders: Set<String> by lazy { specs.flatMap { it.folders }.toSet() }
@@ -396,9 +397,9 @@ object Library {
     }
 
     private val firmwareFolders = setOf("bios", "firmware")
-    private val sheetExts = setOf("cue", "gdi", "m3u")
+    internal val sheetExts = setOf("cue", "gdi", "m3u")
 
-    private fun sheetParts(sheet: File): List<String> = runCatching {
+    internal fun sheetParts(sheet: File): List<String> = runCatching {
         if (sheet.length() > 64 * 1024) return emptyList()
         sheet.readLines().mapNotNull { line ->
             val t = line.trim()
