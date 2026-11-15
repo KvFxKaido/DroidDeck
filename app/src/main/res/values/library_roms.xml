@@ -2,6 +2,7 @@
 <resources>
     <string name="source_emulation">Emulation</string>
     <string name="library_rom_choose_emulator">Open %1$s games with</string>
+    <string name="library_art_change">Change artwork</string>
     <string name="library_rom_game_emulator">Open %1$s with</string>
     <string name="library_rom_selected">%1$s (selected)</string>
     <string name="library_rom_use_default">Use the %1$s default</string>
