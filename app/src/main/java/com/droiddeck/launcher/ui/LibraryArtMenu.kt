@@ -25,6 +25,6 @@ internal fun LibraryArtChooser(request: LibraryArtRequest, view: String, onClose
     val ctx = LocalContext.current
     val slot = libraryArtSlot(view)
     val target = remember(request.key) { libraryArtTarget(request.key, request.title) }
-    val file = LibraryArt.chosen(ctx, request.key, slot)
+    val file = remember(request.key, slot, LibraryArt.version) { LibraryArt.chosen(ctx, request.key, slot) }
     ArtChooserDialog(target, slot, AddedGameArt.SlotState(slot, file, AddedGameArt.SGDB, file != null), onBack = onClose, onCloseAll = onClose) {}
 }
