@@ -40,6 +40,8 @@ internal object AndroidRoms {
         private set
     var gameChosen by mutableStateOf<Map<String, String>>(emptyMap())
         private set
+    var coversSettled by mutableStateOf(false)
+        private set
     private var loaded = false
 
     fun load(context: Context) {
@@ -72,12 +74,16 @@ internal object AndroidRoms {
         games = found
         installed = emulators
         HomeLibrary.setEmulators(app, emulators.values.flatten().map { it.packageName }.toSet())
-        if (found.isEmpty() || OfflineMode.enabled(app)) return
+        if (found.isEmpty() || OfflineMode.enabled(app)) {
+            coversSettled = true
+            return
+        }
         val wanted = found.filter { it.art == null }.mapNotNull { AndroidEmulators.coverRom(it) }
         repeat((wanted.size + COVERS_PER_PASS - 1) / COVERS_PER_PASS) {
             val fetched = withContext(Dispatchers.IO) { runCatching { CoverArt.fetchMissing(app, wanted) }.getOrDefault(false) }
             if (fetched) games = withContext(Dispatchers.IO) { withArt(app, found) }
         }
+        coversSettled = true
     }
 
     private fun withArt(context: Context, games: List<AndroidEmulators.Game>): List<AndroidEmulators.Game> =
