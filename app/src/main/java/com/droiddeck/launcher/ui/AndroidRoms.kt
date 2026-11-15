@@ -17,6 +17,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.droiddeck.launcher.HomeLibrary
 import com.droiddeck.launcher.R
 import com.droiddeck.launcher.frontend.AndroidEmulators
 import com.droiddeck.launcher.frontend.CoverArt
@@ -70,6 +71,7 @@ internal object AndroidRoms {
         }
         games = found
         installed = emulators
+        HomeLibrary.setEmulators(app, emulators.values.flatten().map { it.packageName }.toSet())
         if (found.isEmpty() || OfflineMode.enabled(app)) return
         val wanted = found.filter { it.art == null }.mapNotNull { AndroidEmulators.coverRom(it) }
         repeat((wanted.size + COVERS_PER_PASS - 1) / COVERS_PER_PASS) {
