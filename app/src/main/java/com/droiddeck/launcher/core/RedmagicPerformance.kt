@@ -26,6 +26,7 @@ object RedmagicPerformance {
     private val worker = Executors.newSingleThreadExecutor { Thread(it, "redmagic-performance").apply { isDaemon = true } }
     @Volatile private var supported: Boolean? = null
     @Volatile private var wanted: Int? = null
+    @Volatile private var inSession = false
     @Volatile private var retryAfter = 0L
     private const val RETRY_MS = 60_000L
 
@@ -86,14 +87,20 @@ object RedmagicPerformance {
     fun onActiveGame(context: Context, game: String?) {
         val app = context.applicationContext
         if (!supported(app)) return
+        inSession = true
         val want = pick(game?.takeIf { it.isNotBlank() }?.let { forGame(app, it) }, default(app))
         if (want == wanted || System.currentTimeMillis() < retryAfter) return
         wanted = want
         worker.execute { if (want == LEAVE) restore(app) else apply(app, want) }
     }
 
+    fun recoverAsync(context: Context) {
+        if (!inSession) restoreAsync(context)
+    }
+
     fun restoreAsync(context: Context) {
         val app = context.applicationContext
+        inSession = false
         wanted = null
         worker.execute { restore(app) }
     }

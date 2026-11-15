@@ -1259,7 +1259,7 @@ class FrontEndActivity : ComponentActivity(), com.droiddeck.launcher.ui.AgentPet
         displayManager = getSystemService(DISPLAY_SERVICE) as DisplayManager
         refreshPhantomStatus()
         if (!SessionState.running) com.droiddeck.launcher.core.BackgroundAppLimit.restoreAsync(this)
-        if (!SessionState.running) com.droiddeck.launcher.core.RedmagicPerformance.restoreAsync(this)
+        if (!SessionState.running) com.droiddeck.launcher.core.RedmagicPerformance.recoverAsync(this)
         theme = SessionPrefs.theme(this)
         frameGenLabel = getString(R.string.frame_gen_off)
         appScale = com.droiddeck.launcher.core.AppUiPrefs.scale(this)
