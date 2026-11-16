@@ -34,6 +34,7 @@ object AndroidEmulators {
         System("wiiu", "Wii U", listOf("wiiu", "wii u"), setOf("wua", "wud", "wux"), coverId = "cemu"),
         System("dreamcast", "Dreamcast", listOf("dreamcast", "dc"), setOf("gdi", "cdi", "chd", "cue"), coverId = "dreamcast"),
         System("switch", "Switch", listOf("switch"), setOf("nsp", "xci")),
+        System("xbox", "Xbox", listOf("xbox"), setOf("iso", "xiso"), coverId = "xbox"),
     )
 
     private const val DOLPHIN = "org.dolphinemu.dolphinemu"
@@ -51,6 +52,7 @@ object AndroidEmulators {
         Recipe("wiiu", "Cemu", "info.cemu.cemu", "info.cemu.cemu.emulation.EmulationActivity", ACTION_VIEW, data = true),
         Recipe("dreamcast", "redream", "io.recompiled.redream", "io.recompiled.redream.MainActivity", ACTION_VIEW, data = true),
         Recipe("switch", "Kenji-NX", "org.kenjinx.android", "org.kenjinx.android.MainActivity", "org.kenjinx.android.LAUNCH_GAME", extra = "bootPath"),
+        Recipe("xbox", "hakuX", "com.rfandango.haku_x", "com.rfandango.haku_x.LauncherActivity", ACTION_VIEW, data = true),
         Recipe("switch", "Eden", null, "org.yuzu.yuzu_emu.activities.EmulationActivity", "android.nfc.action.TECH_DISCOVERED", data = true),
     )
 
@@ -83,7 +85,7 @@ object AndroidEmulators {
     }
 
     private fun titleOf(f: File): String =
-        Library.displayTitle(if (f.name.equals("EBOOT.PBP", ignoreCase = true)) f.parentFile?.name ?: f.nameWithoutExtension else f.nameWithoutExtension)
+        Library.displayTitle(if (f.name.equals("EBOOT.PBP", ignoreCase = true)) f.parentFile?.name ?: f.nameWithoutExtension else f.nameWithoutExtension.removeSuffix(".xiso"))
 
     fun coverRom(game: Game): Library.Rom? = game.system.coverId?.let { Library.Rom(game.title, game.file, "", it) }
 
