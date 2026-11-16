@@ -28,6 +28,7 @@ object CoverArt {
         "cemu" to listOf("Nintendo_-_Wii_U"),
         "dreamcast" to listOf("Sega_-_Dreamcast"),
         "xbox" to listOf("Microsoft_-_Xbox"),
+        "vita3k" to listOf("Sony_-_PlayStation_Vita"),
     )
 
     private fun root(context: Context) = File(context.filesDir, "covers")
@@ -73,7 +74,7 @@ object CoverArt {
     }
 
     private fun findUrl(context: Context, rom: Library.Rom): String? {
-        val name = rom.hostPath.nameWithoutExtension.removeSuffix(".dec").removeSuffix(".xiso")
+        val name = if (rom.emulatorId == "vita3k") rom.name else rom.hostPath.nameWithoutExtension.removeSuffix(".dec").removeSuffix(".xiso")
         for (collection in collections.getValue(rom.emulatorId)) {
             val exact = thumbnailUrl(collection, name)
             if (exists(exact)) return exact

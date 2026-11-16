@@ -7,11 +7,14 @@ object AndroidEmulators {
     const val ACTION_MAIN = "android.intent.action.MAIN"
     const val ACTION_VIEW = "android.intent.action.VIEW"
 
-    class System(val id: String, val name: String, val folders: List<String>, val exts: Set<String>, val coverId: String? = null, val trackOfSheet: Boolean = false)
+    class System(
+        val id: String, val name: String, val folders: List<String>, val exts: Set<String>, val coverId: String? = null, val trackOfSheet: Boolean = false,
+        val apps: String? = null,
+    )
 
     class Recipe(
         val system: String, val name: String, val packageName: String?, val activity: String, val action: String,
-        val data: Boolean = false, val extra: String? = null, val extraIsPath: Boolean = false,
+        val data: Boolean = false, val extra: String? = null, val extraIsPath: Boolean = false, val extraIsName: Boolean = false,
     )
 
     class Installed(val recipe: Recipe, val packageName: String, val label: String)
@@ -35,6 +38,7 @@ object AndroidEmulators {
         System("dreamcast", "Dreamcast", listOf("dreamcast", "dc"), setOf("gdi", "cdi", "chd", "cue"), coverId = "dreamcast"),
         System("switch", "Switch", listOf("switch"), setOf("nsp", "xci")),
         System("xbox", "Xbox", listOf("xbox"), setOf("iso", "xiso"), coverId = "xbox"),
+        System("vita", "PS Vita", listOf("vita", "psvita"), emptySet(), coverId = "vita3k", apps = "ux0/app"),
     )
 
     private const val DOLPHIN = "org.dolphinemu.dolphinemu"
@@ -53,6 +57,7 @@ object AndroidEmulators {
         Recipe("dreamcast", "redream", "io.recompiled.redream", "io.recompiled.redream.MainActivity", ACTION_VIEW, data = true),
         Recipe("switch", "Kenji-NX", "org.kenjinx.android", "org.kenjinx.android.MainActivity", "org.kenjinx.android.LAUNCH_GAME", extra = "bootPath"),
         Recipe("xbox", "hakuX", "com.rfandango.haku_x", "com.rfandango.haku_x.LauncherActivity", ACTION_VIEW, data = true),
+        Recipe("vita", "Vita3K", "org.vita3k.emulator", "org.vita3k.emulator.Emulator", ACTION_MAIN, extra = "title_id", extraIsName = true),
         Recipe("switch", "Eden", null, "org.yuzu.yuzu_emu.activities.EmulationActivity", "android.nfc.action.TECH_DISCOVERED", data = true),
     )
 
@@ -66,6 +71,13 @@ object AndroidEmulators {
         val tops = root.listFiles { f -> f.isDirectory }.orEmpty().sortedBy { it.name.lowercase() }
         for (top in tops) {
             val system = systems.firstOrNull { top.name.lowercase() in it.folders } ?: continue
+            if (system.apps != null) {
+                for (app in File(top, system.apps).listFiles { f -> f.isDirectory }.orEmpty().sortedBy { it.name }) {
+                    val sfo = File(app, "sce_sys/param.sfo").takeIf { it.isFile } ?: continue
+                    out += Game(system, sfoTitle(sfo) ?: app.name, app, app.lastModified())
+                }
+                continue
+            }
             val dirs = top.walkTopDown().maxDepth(3).onEnter { it == top || it.name.lowercase() !in dataFolders }.filter { it.isDirectory }
             for (dir in dirs) {
                 val files = dir.listFiles()?.sortedBy { it.name.lowercase() }.orEmpty().filter { it.isFile }
@@ -83,6 +95,21 @@ object AndroidEmulators {
         }
         return out.distinctBy { it.file.path }
     }
+
+    internal fun sfoTitle(sfo: File): String? = runCatching {
+        val d = sfo.readBytes()
+        fun u16(o: Int) = (d[o].toInt() and 0xFF) or ((d[o + 1].toInt() and 0xFF) shl 8)
+        fun u32(o: Int) = u16(o) or (u16(o + 2) shl 16)
+        val keys = u32(8)
+        val data = u32(12)
+        (0 until u32(16)).firstNotNullOfOrNull { i ->
+            val e = 20 + i * 16
+            val k = keys + u16(e)
+            val key = String(d, k, generateSequence(k) { it + 1 }.first { d[it].toInt() == 0 } - k, Charsets.US_ASCII)
+            if (key != "TITLE") null
+            else String(d, data + u32(e + 12), u32(e + 4), Charsets.UTF_8).substringBefore('\u0000').replace(Regex("[\u00AE\u2122]"), "").trim().ifEmpty { null }
+        }
+    }.getOrNull()
 
     private fun titleOf(f: File): String =
         Library.displayTitle(if (f.name.equals("EBOOT.PBP", ignoreCase = true)) f.parentFile?.name ?: f.nameWithoutExtension else f.nameWithoutExtension.removeSuffix(".xiso"))
@@ -125,7 +152,7 @@ object AndroidEmulators {
         val r = target.recipe
         return Launch(
             target.packageName, r.activity, r.action, documentUri.takeIf { r.data },
-            r.extra?.let { mapOf(it to if (r.extraIsPath) path else documentUri) }.orEmpty(),
+            r.extra?.let { mapOf(it to if (r.extraIsName) File(path).name else if (r.extraIsPath) path else documentUri) }.orEmpty(),
         )
     }
 
