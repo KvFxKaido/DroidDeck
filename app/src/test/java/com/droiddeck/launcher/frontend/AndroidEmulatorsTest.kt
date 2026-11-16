@@ -159,6 +159,28 @@ class AndroidEmulatorsTest {
         assertEquals(listOf("xbox:Halo"), games.map { it.system.id + ":" + it.title })
     }
 
+    @Test fun vitaGamesAreInstalledFoldersNamedByTheirParamSfoAndOpenedByTitleId() {
+        fun sfo(title: String): ByteArray {
+            val key = "TITLE\u0000".toByteArray()
+            val value = (title + "\u0000").toByteArray(Charsets.UTF_8)
+            val out = java.nio.ByteBuffer.allocate(36 + key.size + value.size).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+            out.putInt(0x46535000).putInt(0x101).putInt(36).putInt(36 + key.size).putInt(1)
+            out.putShort(0).putShort(0x204).putInt(value.size).putInt(value.size).putInt(0)
+            return out.put(key).put(value).array()
+        }
+        File(tmp.root, "Vita/ux0/app/PCSA00015/sce_sys").mkdirs()
+        File(tmp.root, "Vita/ux0/app/PCSA00015/sce_sys/param.sfo").writeBytes(sfo("WipEout\u00AE 2048"))
+        File(tmp.root, "Vita/ux0/app/NOSFO0000").mkdirs()
+        file("Vita/Games/loose.iso")
+        val game = AndroidEmulators.scan(tmp.root).single()
+        assertEquals("vita", game.system.id)
+        assertEquals("WipEout 2048", game.title)
+        val launch = AndroidEmulators.launch(target("vita", "Vita3K"), link, game.file.path)
+        assertEquals("org.vita3k.emulator.Emulator", launch.activity)
+        assertNull(launch.data)
+        assertEquals(mapOf("title_id" to "PCSA00015"), launch.extras)
+    }
+
     @Test fun aRecipeMarkedAsPathSendsThePlainPath() {
         val recipe = AndroidEmulators.Recipe("ps2", "X", "x.y", "x.y.Main", AndroidEmulators.ACTION_MAIN, extra = "bootPath", extraIsPath = true)
         assertEquals(mapOf("bootPath" to path), AndroidEmulators.launch(AndroidEmulators.Installed(recipe, "x.y", "X"), link, path).extras)
