@@ -27,6 +27,7 @@ object CoverArt {
         "melonds" to listOf("Nintendo_-_Nintendo_DS"),
         "cemu" to listOf("Nintendo_-_Wii_U"),
         "dreamcast" to listOf("Sega_-_Dreamcast"),
+        "xbox" to listOf("Microsoft_-_Xbox"),
     )
 
     private fun root(context: Context) = File(context.filesDir, "covers")
@@ -72,7 +73,7 @@ object CoverArt {
     }
 
     private fun findUrl(context: Context, rom: Library.Rom): String? {
-        val name = rom.hostPath.nameWithoutExtension.removeSuffix(".dec")
+        val name = rom.hostPath.nameWithoutExtension.removeSuffix(".dec").removeSuffix(".xiso")
         for (collection in collections.getValue(rom.emulatorId)) {
             val exact = thumbnailUrl(collection, name)
             if (exists(exact)) return exact

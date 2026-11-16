@@ -147,6 +147,18 @@ class AndroidEmulatorsTest {
         assertEquals(mapOf("bootPath" to link), kenji.extras)
     }
 
+    @Test fun hakuXGetsTheGameAsIntentDataAndXboxImagesLoseTheirXisoSuffix() {
+        val hakux = AndroidEmulators.launch(target("xbox", "hakuX"), link, path)
+        assertEquals("com.rfandango.haku_x.LauncherActivity", hakux.activity)
+        assertEquals(AndroidEmulators.ACTION_VIEW, hakux.action)
+        assertEquals(link, hakux.data)
+        assertTrue(hakux.extras.isEmpty())
+        file("Xbox/Games/Halo (USA).xiso.iso")
+        file("Xbox 360/Halo 3.iso")
+        val games = AndroidEmulators.scan(tmp.root)
+        assertEquals(listOf("xbox:Halo"), games.map { it.system.id + ":" + it.title })
+    }
+
     @Test fun aRecipeMarkedAsPathSendsThePlainPath() {
         val recipe = AndroidEmulators.Recipe("ps2", "X", "x.y", "x.y.Main", AndroidEmulators.ACTION_MAIN, extra = "bootPath", extraIsPath = true)
         assertEquals(mapOf("bootPath" to path), AndroidEmulators.launch(AndroidEmulators.Installed(recipe, "x.y", "X"), link, path).extras)
