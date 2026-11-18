@@ -18,6 +18,10 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -150,6 +154,7 @@ internal fun HomeShelf(s: FrontEndState, a: FrontEndActions) {
     var dockMenu by remember { mutableStateOf<DockSlot?>(null) }
     var addingToDock by remember { mutableStateOf(false) }
     var iconFor by remember { mutableStateOf<HomeApp.LaunchableApp?>(null) }
+    var popoutFor by remember { mutableStateOf<DockSlot?>(null) }
     LaunchedEffect(Unit) { StoresState.refresh(ctx) }
     LaunchedEffect(s.romsDir) { AndroidRoms.refresh(ctx, s.romsDir) }
     val signedIn = Store.entries.filter { StoresState.isSignedIn(it) }
@@ -256,6 +261,7 @@ internal fun HomeShelf(s: FrontEndState, a: FrontEndActions) {
             slot.label,
             listOfNotNull(
                 app?.let { ShelfMenuRow(stringResource(R.string.home_dock_icon)) { dockMenu = null; iconFor = it } },
+                ShelfMenuRow(stringResource(R.string.home_dock_popout)) { dockMenu = null; popoutFor = slot },
                 ShelfMenuRow(stringResource(R.string.home_dock_move_left)) { DockPrefs.move(ctx, slot.id, -1); dockMenu = null }.takeIf { at > 0 },
                 ShelfMenuRow(stringResource(R.string.home_dock_move_right)) { DockPrefs.move(ctx, slot.id, 1); dockMenu = null }.takeIf { at in 0 until DockPrefs.items.lastIndex },
                 ShelfMenuRow(stringResource(R.string.home_dock_remove)) { DockPrefs.remove(ctx, slot.id); dockMenu = null }.takeIf { slot.id != DockPrefs.LIBRARY },
@@ -273,6 +279,14 @@ internal fun HomeShelf(s: FrontEndState, a: FrontEndActions) {
         ShelfMenu(stringResource(R.string.home_dock_add_title), pages + apps) { addingToDock = false }
     }
     iconFor?.let { app -> AppIconPicker(app, 24.dp) { iconFor = null } }
+    popoutFor?.let { slot ->
+        val chosen = DockPrefs.popouts[slot.id].orEmpty()
+        val rows = s.androidApps.filter { appDockId(it.packageName, it.className) != slot.id }.sortedBy { it.label.lowercase() }.map { app ->
+            val id = appDockId(app.packageName, app.className)
+            ShelfMenuRow(app.label, checked = id in chosen) { DockPrefs.togglePopout(ctx, slot.id, id) }
+        }
+        ShelfMenu(stringResource(R.string.home_dock_popout_title, slot.label), rows, confirm = stringResource(R.string.home_dock_done)) { popoutFor = null }
+    }
     itemMenu?.let { e ->
         val favorite = e.favoriteKey in LibraryFavorites.keys
         ShelfMenu(
@@ -364,7 +378,7 @@ internal class ShelfMenuRow(val label: String, val checked: Boolean? = null, val
 
 // One menu style for the whole shelf: the Shelf menu and every item menu.
 @Composable
-private fun ShelfMenu(title: String, rows: List<ShelfMenuRow>, onDismiss: () -> Unit) {
+private fun ShelfMenu(title: String, rows: List<ShelfMenuRow>, confirm: String? = null, onDismiss: () -> Unit) {
     val first = remember { FocusRequester() }
     LaunchedEffect(Unit) {
         repeat(10) {
@@ -396,7 +410,7 @@ private fun ShelfMenu(title: String, rows: List<ShelfMenuRow>, onDismiss: () -> 
         },
         confirmButton = {
             androidx.compose.material3.TextButton(onClick = onDismiss, modifier = Modifier.focusGlide(androidx.compose.foundation.shape.CircleShape)) {
-                Text(stringResource(R.string.common_cancel))
+                Text(confirm ?: stringResource(R.string.common_cancel))
             }
         },
     )
@@ -469,6 +483,8 @@ private fun ShelfDock(s: FrontEndState, a: FrontEndActions, first: FocusRequeste
             else -> null
         }
     }
+    var open by remember { mutableStateOf<String?>(null) }
+    val launchApp: (HomeApp.LaunchableApp) -> Unit = { a.onAndroidApp(it, null) }
     val activate: (DockSlot) -> Unit = { slot ->
         val app = slot.app
         when {
@@ -481,19 +497,33 @@ private fun ShelfDock(s: FrontEndState, a: FrontEndActions, first: FocusRequeste
         Row(Modifier.align(Alignment.Center), horizontalArrangement = Arrangement.spacedBy(22.dp), verticalAlignment = Alignment.CenterVertically) {
             slots.forEachIndexed { i, slot ->
                 key(slot.id) {
-                    DockItem(slot.glyph, slot.app?.icon, slot.label, if (i == 0) Modifier.focusRequester(first) else Modifier, onMenu = { onMenu(slot) }) { activate(slot) }
+                    val inside = DockPrefs.popouts[slot.id].orEmpty().mapNotNull { id ->
+                        dockApp(id)?.let { (pkg, cls) -> s.androidApps.firstOrNull { it.packageName == pkg && it.className == cls } }
+                    }
+                    DockItem(
+                        slot.glyph, slot.app?.icon, slot.label, if (i == 0) Modifier.focusRequester(first) else Modifier,
+                        onMenu = { onMenu(slot) },
+                        onPopout = if (inside.isEmpty()) null else ({ open = if (open == slot.id) null else slot.id }),
+                        anchored = {
+                            if (open == slot.id && inside.isNotEmpty()) DockPopout(slot, inside, onHeader = { open = null; activate(slot) }, onApp = { open = null; launchApp(it) }) { open = null }
+                        },
+                    ) { activate(slot) }
                 }
             }
         }
         Box(Modifier.align(Alignment.CenterStart).padding(start = 28.dp)) {
-            DockItem(DockGlyph.MENU, null, stringResource(R.string.home_shelf_options), Modifier, onMenu = null, onClick = onOptions)
+            DockItem(DockGlyph.MENU, null, stringResource(R.string.home_shelf_options), Modifier, onMenu = null, onPopout = null, onClick = onOptions)
         }
     }
 }
 
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
-private fun DockItem(glyph: DockGlyph?, icon: Bitmap?, label: String, focus: Modifier, onMenu: (() -> Unit)?, onClick: () -> Unit) {
+private fun DockItem(
+    glyph: DockGlyph?, icon: Bitmap?, label: String, focus: Modifier, onMenu: (() -> Unit)?, onPopout: (() -> Unit)?,
+    anchored: @Composable () -> Unit = {}, onClick: () -> Unit,
+) {
+    val swipe = with(androidx.compose.ui.platform.LocalDensity.current) { 40.dp.toPx() }
     var focused by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(if (focused) 1.1f else 1f, label = "shelfDock")
     val shape = RoundedCornerShape(20.dp)
@@ -504,6 +534,14 @@ private fun DockItem(glyph: DockGlyph?, icon: Bitmap?, label: String, focus: Mod
             .semantics { contentDescription = label }
             .then(focus)
             .onFocusChanged { focused = it.isFocused }
+            .then(if (onPopout == null) Modifier else Modifier.pointerInput(onPopout) {
+                var travel = 0f
+                detectVerticalDragGestures(onDragStart = { travel = 0f }, onDragEnd = { if (travel < -swipe) onPopout() }) { _, dy -> travel += dy }
+            }.onPreviewKeyEvent { event ->
+                val x = event.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_BUTTON_X
+                if (x && event.type == KeyEventType.KeyUp) onPopout()
+                x
+            })
             .combinedClickable(role = Role.Button, onClick = onClick, onLongClick = onMenu)
             .then(if (onMenu != null) Modifier.menuKey(onMenu) else Modifier)
             .controllerConfirm(onClick = onClick),
@@ -513,6 +551,77 @@ private fun DockItem(glyph: DockGlyph?, icon: Bitmap?, label: String, focus: Mod
             icon != null -> androidx.compose.foundation.Image(icon.asImageBitmap(), contentDescription = null, modifier = Modifier.size(40.dp))
             glyph != null -> Box(Modifier.size(36.dp).drawBehind { drawGlyph(glyph, if (glyph == DockGlyph.LIBRARY) Color(0xFF3B82F6) else Color(0xFFEDEDED)) })
         }
+        if (onPopout != null) Box(Modifier.align(Alignment.BottomCenter).padding(bottom = 5.dp).size(4.dp).background(Color(0xFFEDEDED), androidx.compose.foundation.shape.CircleShape))
+        anchored()
+    }
+}
+
+private class AboveAnchor(private val gap: Int, private val margin: Int) : androidx.compose.ui.window.PopupPositionProvider {
+    override fun calculatePosition(
+        anchorBounds: androidx.compose.ui.unit.IntRect, windowSize: androidx.compose.ui.unit.IntSize,
+        layoutDirection: androidx.compose.ui.unit.LayoutDirection, popupContentSize: androidx.compose.ui.unit.IntSize,
+    ): androidx.compose.ui.unit.IntOffset {
+        val maxX = (windowSize.width - popupContentSize.width - margin).coerceAtLeast(margin)
+        val x = (anchorBounds.center.x - popupContentSize.width / 2).coerceIn(margin, maxX)
+        val y = (anchorBounds.top - popupContentSize.height - gap).coerceAtLeast(margin)
+        return androidx.compose.ui.unit.IntOffset(x, y)
+    }
+}
+
+// Niagara-style: a card above the dock item; its header opens the item itself.
+@Composable
+private fun DockPopout(slot: DockSlot, apps: List<HomeApp.LaunchableApp>, onHeader: () -> Unit, onApp: (HomeApp.LaunchableApp) -> Unit, onDismiss: () -> Unit) {
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val provider = remember(density) { with(density) { AboveAnchor(12.dp.roundToPx(), 16.dp.roundToPx()) } }
+    val first = remember { FocusRequester() }
+    LaunchedEffect(Unit) {
+        repeat(10) {
+            androidx.compose.runtime.withFrameNanos { }
+            if (runCatching { first.requestFocus() }.isSuccess) return@LaunchedEffect
+        }
+    }
+    androidx.compose.ui.window.Popup(
+        popupPositionProvider = provider, onDismissRequest = onDismiss,
+        properties = androidx.compose.ui.window.PopupProperties(focusable = true),
+    ) {
+        androidx.compose.foundation.layout.Column(
+            Modifier.width(340.dp).heightIn(max = 420.dp).clip(RoundedCornerShape(24.dp)).background(Color(0xFF161616))
+                .onPreviewKeyEvent { event ->
+                    val code = event.nativeKeyEvent.keyCode
+                    val close = code == android.view.KeyEvent.KEYCODE_BUTTON_B || code == android.view.KeyEvent.KEYCODE_BACK || code == android.view.KeyEvent.KEYCODE_BUTTON_X
+                    if (close && event.type == KeyEventType.KeyUp) onDismiss()
+                    close
+                }
+                .verticalScroll(rememberScrollState()).padding(vertical = 10.dp),
+        ) {
+            PopoutRow(slot.app?.icon, slot.glyph, slot.label, header = true, focus = Modifier.focusRequester(first), onClick = onHeader)
+            apps.forEach { app -> key(app.key) { PopoutRow(app.icon, null, app.label, header = false, focus = Modifier, onClick = { onApp(app) }) } }
+        }
+    }
+}
+
+@Composable
+private fun PopoutRow(icon: Bitmap?, glyph: DockGlyph?, label: String, header: Boolean, focus: Modifier, onClick: () -> Unit) {
+    var focused by remember { mutableStateOf(false) }
+    val shape = RoundedCornerShape(16.dp)
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 2.dp)
+            .then(if (focused) Modifier.background(Color.White.copy(alpha = 0.08f), shape).border(2.dp, SHELF_RING, shape) else Modifier)
+            .clip(shape).then(focus)
+            .onFocusChanged { focused = it.isFocused }
+            .clickable(role = Role.Button, onClick = onClick)
+            .controllerConfirm(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = if (header) 8.dp else 10.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        val size = if (header) 28.dp else 40.dp
+        when {
+            icon != null -> androidx.compose.foundation.Image(icon.asImageBitmap(), contentDescription = null, modifier = Modifier.size(size))
+            glyph != null -> Box(Modifier.size(size).drawBehind { drawGlyph(glyph, Color(0xFFEDEDED)) })
+            else -> Box(Modifier.size(size))
+        }
+        Text(label, color = Color.White, fontSize = if (header) 17.sp else 18.sp, fontWeight = if (header) FontWeight.Bold else FontWeight.Medium, maxLines = 1)
+        if (header) Text("\u2197", color = Color.White.copy(alpha = 0.7f), fontSize = 16.sp)
     }
 }
 
