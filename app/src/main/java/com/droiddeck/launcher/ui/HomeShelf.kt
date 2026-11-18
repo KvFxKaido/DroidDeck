@@ -9,6 +9,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -138,6 +139,8 @@ internal fun HomeShelf(s: FrontEndState, a: FrontEndActions) {
     remember { AndroidRoms.load(ctx) }
     remember { ShelfPrefs.load(ctx) }
     var options by remember { mutableStateOf(false) }
+    var focusedEntry by remember { mutableStateOf<LibraryEntry?>(null) }
+    var artFor by remember { mutableStateOf<LibraryEntry?>(null) }
     LaunchedEffect(Unit) { StoresState.refresh(ctx) }
     LaunchedEffect(s.romsDir) { AndroidRoms.refresh(ctx, s.romsDir) }
     val signedIn = Store.entries.filter { StoresState.isSignedIn(it) }
@@ -221,16 +224,48 @@ internal fun HomeShelf(s: FrontEndState, a: FrontEndActions) {
             horizontalArrangement = Arrangement.spacedBy(gap), verticalArrangement = Arrangement.spacedBy(gap),
         ) {
             itemsIndexed(entries, key = { _, e -> e.key }) { i, e ->
-                ShelfTile(e, tile, if (i == start) Modifier.focusRequester(tileFocus) else Modifier) { open(e) }
+                ShelfTile(e, tile, if (i == start) Modifier.focusRequester(tileFocus) else Modifier, onFocused = { focusedEntry = e }, onArt = { artFor = e }) { open(e) }
             }
         }
         ShelfDock(s, a, dockFocus, { options = true }, Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(dockHeight))
     }
-    if (options) ShelfOptionsDialog(installedOnly, onPick = { ShelfPrefs.setInstalledOnly(ctx, it); options = false }) { options = false }
+    if (options) ShelfOptionsDialog(
+        installedOnly, focusedEntry?.title,
+        onArt = { options = false; artFor = focusedEntry },
+        onPick = { ShelfPrefs.setInstalledOnly(ctx, it); options = false },
+    ) { options = false }
+    artFor?.let { e -> ShelfArtChooser(e) { artFor = null } }
 }
 
 @Composable
-private fun ShelfOptionsDialog(installedOnly: Boolean, onPick: (Boolean) -> Unit, onDismiss: () -> Unit) {
+private fun ShelfArtChooser(e: LibraryEntry, onClose: () -> Unit) {
+    val ctx = LocalContext.current
+    val steamAppId = e.game?.takeIf { com.droiddeck.launcher.frontend.Library.fromSteamClient(it) }?.appId
+    val target = remember(e.key) {
+        ArtTarget(
+            e.title,
+            { c, _ -> ShelfArt.chosenRef(c, e.key) },
+            { c, _ -> ShelfArt.choices(c, e.key, e.title, steamAppId) },
+            { c, _, option -> ShelfArt.set(c, e.key, option) },
+            { c, _ -> ShelfArt.reset(c, e.key) },
+            { _ -> null },
+            { _, _ -> false },
+        )
+    }
+    val slot = com.droiddeck.launcher.frontend.AddedGameArt.Slot.ICON
+    val file = remember(e.key, ShelfArt.version) { ShelfArt.chosen(ctx, e.key) }
+    DisposableEffect(Unit) {
+        ShelfArt.hold()
+        onDispose { ShelfArt.release() }
+    }
+    ArtChooserDialog(
+        target, slot, com.droiddeck.launcher.frontend.AddedGameArt.SlotState(slot, file, com.droiddeck.launcher.frontend.AddedGameArt.SGDB, file != null),
+        onBack = onClose, onCloseAll = onClose,
+    ) {}
+}
+
+@Composable
+private fun ShelfOptionsDialog(installedOnly: Boolean, artTitle: String?, onArt: () -> Unit, onPick: (Boolean) -> Unit, onDismiss: () -> Unit) {
     androidx.compose.material3.AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.home_shelf_options)) },
@@ -239,6 +274,9 @@ private fun ShelfOptionsDialog(installedOnly: Boolean, onPick: (Boolean) -> Unit
                 verticalArrangement = Arrangement.spacedBy(4.dp),
                 modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
             ) {
+                if (artTitle != null) androidx.compose.material3.TextButton(onClick = onArt, modifier = Modifier.focusGlide(androidx.compose.foundation.shape.CircleShape)) {
+                    Text(stringResource(R.string.home_shelf_art_for, artTitle))
+                }
                 for ((value, label) in listOf(false to R.string.home_shelf_favorites, true to R.string.home_shelf_installed)) {
                     androidx.compose.material3.TextButton(onClick = { onPick(value) }, modifier = Modifier.focusGlide(androidx.compose.foundation.shape.CircleShape)) {
                         Text((if (value == installedOnly) "\u2713  " else "     ") + stringResource(label))
@@ -254,8 +292,9 @@ private fun ShelfOptionsDialog(installedOnly: Boolean, onPick: (Boolean) -> Unit
     )
 }
 
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
-private fun ShelfTile(e: LibraryEntry, size: Dp, focus: Modifier, onOpen: () -> Unit) {
+private fun ShelfTile(e: LibraryEntry, size: Dp, focus: Modifier, onFocused: () -> Unit, onArt: () -> Unit, onOpen: () -> Unit) {
     val ctx = LocalContext.current
     var focused by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(if (focused) 1.08f else 1f, label = "shelfTile")
@@ -268,8 +307,8 @@ private fun ShelfTile(e: LibraryEntry, size: Dp, focus: Modifier, onOpen: () -> 
             .clip(shape).background(Color(0xFF161616))
             .semantics { contentDescription = e.title }
             .then(focus)
-            .onFocusChanged { focused = it.isFocused }
-            .clickable(role = Role.Button, onClick = onOpen)
+            .onFocusChanged { focused = it.isFocused; if (it.isFocused) onFocused() }
+            .combinedClickable(role = Role.Button, onClick = onOpen, onLongClick = onArt)
             .controllerConfirm(onClick = onOpen),
     ) {
         when (art) {

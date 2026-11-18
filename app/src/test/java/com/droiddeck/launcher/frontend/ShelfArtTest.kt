@@ -63,6 +63,37 @@ class ShelfArtTest {
     }
 
     @Test
+    fun aPickBeatsTheAutomaticSquare() {
+        val dir = tempDir()
+        File(dir, "square").writeBytes(byteArrayOf(1))
+        File(dir, "chosen-icon-0000000000001.png").writeBytes(byteArrayOf(2))
+        assertEquals("chosen-icon-0000000000001.png", ShelfArt.shownIn(dir)?.name)
+    }
+
+    @Test
+    fun resetStepsFromPickToAutomaticToCoverAndBack() {
+        val dir = tempDir()
+        File(dir, "square").writeBytes(byteArrayOf(1))
+        File(dir, "chosen-icon-0000000000001.png").writeBytes(byteArrayOf(2))
+        ShelfArt.resetIn(dir)
+        assertEquals("square", ShelfArt.shownIn(dir)?.name)
+        ShelfArt.resetIn(dir)
+        assertNull(ShelfArt.shownIn(dir))
+        assertFalse(ShelfArt.needsFetch(dir, now = 1_000L, keyChangedAt = 0L))
+        ShelfArt.resetIn(dir)
+        assertTrue(ShelfArt.needsFetch(dir, now = 1_000L, keyChangedAt = 0L))
+    }
+
+    @Test
+    fun theChooserListsLargePngIconsBestFirst() {
+        val items = org.json.JSONArray()
+            .put(icon("https://a/small.png", 64, 99))
+            .put(icon("https://a/b.png", 256, 1))
+            .put(icon("https://a/a.png", 512, 8))
+        assertEquals(listOf("https://a/a.png", "https://a/b.png"), ShelfArt.iconOptions(items).map { it.full })
+    }
+
+    @Test
     fun aRateLimitPausesForTenMinutes() {
         assertEquals(10L * 60 * 1000 + 5L, ShelfArt.pauseAfter(SteamGridDb.Status.LIMIT, 5L))
         assertEquals(0L, ShelfArt.pauseAfter(SteamGridDb.Status.OFFLINE, 5L))
