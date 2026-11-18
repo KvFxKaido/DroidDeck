@@ -13,19 +13,40 @@ internal object DockPrefs {
     val PAGES = listOf("games", "stores", AppUiPrefs.HOME_PAGE_APPS, "setup", "steam")
     val DEFAULT = PAGES.map { "page:$it" }
 
+    private const val POPOUT = "popout:"
+
     var items by mutableStateOf(DEFAULT)
+        private set
+    var popouts by mutableStateOf<Map<String, List<String>>>(emptyMap())
         private set
     private var loaded = false
 
     fun load(context: Context) {
         if (loaded) return
         loaded = true
-        items = dockParse(context.getSharedPreferences(FILE, Context.MODE_PRIVATE).getString(KEY, null))
+        val prefs = context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
+        items = dockParse(prefs.getString(KEY, null))
+        popouts = prefs.all.mapNotNull { (k, v) ->
+            if (!k.startsWith(POPOUT)) null else (v as? String)?.let { popoutParse(it) }?.takeIf { it.isNotEmpty() }?.let { k.removePrefix(POPOUT) to it }
+        }.toMap()
     }
 
     fun add(context: Context, id: String) = save(context, dockAdd(items, id))
 
-    fun remove(context: Context, id: String) = save(context, dockRemove(items, id))
+    fun remove(context: Context, id: String) {
+        save(context, dockRemove(items, id))
+        if (id != LIBRARY) savePopout(context, id, emptyList())
+    }
+
+    fun togglePopout(context: Context, itemId: String, appId: String) =
+        savePopout(context, itemId, popoutToggle(popouts[itemId].orEmpty(), appId))
+
+    private fun savePopout(context: Context, itemId: String, apps: List<String>) {
+        popouts = if (apps.isEmpty()) popouts - itemId else popouts + (itemId to apps)
+        val edit = context.getSharedPreferences(FILE, Context.MODE_PRIVATE).edit()
+        if (apps.isEmpty()) edit.remove(POPOUT + itemId) else edit.putString(POPOUT + itemId, apps.joinToString("\n"))
+        edit.apply()
+    }
 
     fun move(context: Context, id: String, delta: Int) = save(context, dockMove(items, id, delta))
 
@@ -49,6 +70,10 @@ internal fun dockParse(raw: String?): List<String> {
 }
 
 internal fun dockAdd(list: List<String>, id: String): List<String> = if (id in list) list else list + id
+
+internal fun popoutParse(raw: String): List<String> = raw.split('\n').map { it.trim() }.filter { dockApp(it) != null }.distinct()
+
+internal fun popoutToggle(list: List<String>, appId: String): List<String> = if (appId in list) list - appId else list + appId
 
 internal fun dockRemove(list: List<String>, id: String): List<String> = if (id == DockPrefs.LIBRARY) list else list - id
 

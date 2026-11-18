@@ -31,6 +31,15 @@ class HomeDockTest {
     }
 
     @Test
+    fun popoutAppsToggleAndParseCleanly() {
+        val one = popoutToggle(emptyList(), "app:com.google.android.gm/.Main")
+        val two = popoutToggle(one, "app:com.facebook.orca/.Main")
+        assertEquals(listOf("app:com.google.android.gm/.Main", "app:com.facebook.orca/.Main"), two)
+        assertEquals(listOf("app:com.facebook.orca/.Main"), popoutToggle(two, "app:com.google.android.gm/.Main"))
+        assertEquals(two, popoutParse(two.joinToString("\n") + "\npage:games\napp:com.facebook.orca/.Main\n"))
+    }
+
+    @Test
     fun addingTwiceKeepsOneAndMovingStaysInBounds() {
         val list = dockAdd(dockAdd(listOf("page:games"), "app:a/b"), "app:a/b")
         assertEquals(listOf("page:games", "app:a/b"), list)
