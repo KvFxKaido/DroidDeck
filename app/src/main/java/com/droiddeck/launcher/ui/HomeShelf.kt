@@ -74,6 +74,7 @@ import com.droiddeck.launcher.HomeLibrary
 import com.droiddeck.launcher.R
 import com.droiddeck.launcher.core.AppUiPrefs
 import com.droiddeck.launcher.frontend.AndroidEmulators
+import com.droiddeck.launcher.frontend.ShelfArt
 import com.droiddeck.launcher.stores.Store
 import com.droiddeck.launcher.stores.StoresState
 
@@ -152,6 +153,11 @@ internal fun HomeShelf(s: FrontEndState, a: FrontEndActions) {
                 androidEntries(s.androidApps, HomeLibrary.added, HomeLibrary.removed, HomeLibrary.emulators) + romEntries(AndroidRoms.games),
             favorites, installedOnly,
         )
+    }
+    LaunchedEffect(entries.map { it.key }) {
+        ShelfArt.fetchAll(ctx, entries.map { e ->
+            ShelfArt.Wanted(e.key, e.title, e.game?.takeIf { com.droiddeck.launcher.frontend.Library.fromSteamClient(it) }?.appId)
+        })
     }
     val open: (LibraryEntry) -> Unit = { e ->
         ShelfState.lastFocused = e.key
@@ -253,7 +259,8 @@ private fun ShelfTile(e: LibraryEntry, size: Dp, focus: Modifier, onOpen: () -> 
     val ctx = LocalContext.current
     var focused by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(if (focused) 1.08f else 1f, label = "shelfTile")
-    val art = remember(e.key, e.app, e.rom, e.game, e.item) { entryArt(ctx, e, tall = true) }
+    val cover = remember(e.key, e.app, e.rom, e.game, e.item) { entryArt(ctx, e, tall = true) }
+    val art = ShelfArt.square(ctx, e.key) ?: cover
     val shape = RoundedCornerShape(size * 0.12f)
     Box(
         Modifier.size(size).zIndex(if (focused) 1f else 0f).graphicsLayer { scaleX = scale; scaleY = scale }
@@ -297,7 +304,7 @@ private fun ShelfDock(s: FrontEndState, a: FrontEndActions, first: FocusRequeste
                 DockItem(glyph, stringResource(label), if (i == 0) Modifier.focusRequester(first) else Modifier, action)
             }
         }
-        Box(Modifier.align(Alignment.CenterEnd).padding(end = 28.dp)) {
+        Box(Modifier.align(Alignment.CenterStart).padding(start = 28.dp)) {
             DockItem(DockGlyph.MENU, stringResource(R.string.home_shelf_options), Modifier, onOptions)
         }
     }
