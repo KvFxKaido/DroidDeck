@@ -26,6 +26,16 @@ class HomeShelfTest {
     }
 
     @Test
+    fun installedOnlyShowsEveryInstalledEntryAndIgnoresFavorites() {
+        val all = listOf(
+            entry("a", "Alpha"),
+            LibraryEntry("b", "epic", "Bravo", null, null, installed = false),
+            entry("c", "Charlie"),
+        )
+        assertEquals(listOf("a", "c"), shelfEntries(all, setOf("b"), installedOnly = true).map { it.key })
+    }
+
+    @Test
     fun aFavoriteListedTwiceAppearsOnce() {
         val all = listOf(entry("a", "Alpha"), entry("a", "Alpha"))
         assertEquals(1, shelfEntries(all, setOf("a")).size)

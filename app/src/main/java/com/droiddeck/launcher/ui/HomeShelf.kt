@@ -39,6 +39,11 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -88,8 +93,28 @@ internal object ShelfState {
 internal fun shelfSortKey(title: String): String =
     title.lowercase().replace(Regex("[^a-z0-9 ]"), "").replace(Regex("\\s+"), " ").trim().removePrefix("the ")
 
-internal fun shelfEntries(all: List<LibraryEntry>, favorites: Set<String>): List<LibraryEntry> =
-    all.filter { it.favoriteKey in favorites }.distinctBy { it.favoriteKey }.sortedWith(compareBy({ shelfSortKey(it.title) }, { it.key }))
+internal object ShelfPrefs {
+    private const val FILE = "home_shelf"
+    private const val INSTALLED = "installed_only"
+    var installedOnly by mutableStateOf(false)
+        private set
+    private var loaded = false
+
+    fun load(context: android.content.Context) {
+        if (loaded) return
+        loaded = true
+        installedOnly = context.getSharedPreferences(FILE, android.content.Context.MODE_PRIVATE).getBoolean(INSTALLED, false)
+    }
+
+    fun setInstalledOnly(context: android.content.Context, value: Boolean) {
+        installedOnly = value
+        context.getSharedPreferences(FILE, android.content.Context.MODE_PRIVATE).edit().putBoolean(INSTALLED, value).apply()
+    }
+}
+
+internal fun shelfEntries(all: List<LibraryEntry>, favorites: Set<String>, installedOnly: Boolean = false): List<LibraryEntry> =
+    all.filter { if (installedOnly) it.installed else it.favoriteKey in favorites }
+        .distinctBy { it.favoriteKey }.sortedWith(compareBy({ shelfSortKey(it.title) }, { it.key }))
 
 private const val SHELF_ROWS = 3
 private const val SHELF_GAP = 0.25f
@@ -110,6 +135,8 @@ internal fun HomeShelf(s: FrontEndState, a: FrontEndActions) {
     remember { LibraryFavorites.load(ctx) }
     remember { HomeLibrary.load(ctx) }
     remember { AndroidRoms.load(ctx) }
+    remember { ShelfPrefs.load(ctx) }
+    var options by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { StoresState.refresh(ctx) }
     LaunchedEffect(s.romsDir) { AndroidRoms.refresh(ctx, s.romsDir) }
     val signedIn = Store.entries.filter { StoresState.isSignedIn(it) }
@@ -118,11 +145,12 @@ internal fun HomeShelf(s: FrontEndState, a: FrontEndActions) {
     val installedStore = StoresState.installed.map { it.key }.toSet()
     val cloudRows = rememberXboxCloudRows(s)
     val favorites = LibraryFavorites.keys
-    val entries = remember(s.steamGames, cloudRows, owned, installedStore, s.androidApps, HomeLibrary.added, HomeLibrary.removed, HomeLibrary.emulators, AndroidRoms.games, favorites) {
+    val installedOnly = ShelfPrefs.installedOnly
+    val entries = remember(s.steamGames, cloudRows, owned, installedStore, s.androidApps, HomeLibrary.added, HomeLibrary.removed, HomeLibrary.emulators, AndroidRoms.games, favorites, installedOnly) {
         shelfEntries(
             libraryEntries(s.steamGames + cloudRows, owned, installedStore) +
                 androidEntries(s.androidApps, HomeLibrary.added, HomeLibrary.removed, HomeLibrary.emulators) + romEntries(AndroidRoms.games),
-            favorites,
+            favorites, installedOnly,
         )
     }
     val open: (LibraryEntry) -> Unit = { e ->
@@ -162,14 +190,22 @@ internal fun HomeShelf(s: FrontEndState, a: FrontEndActions) {
             if (runCatching { (if (entries.isEmpty()) dockFocus else tileFocus).requestFocus() }.isSuccess) return@LaunchedEffect
         }
     }
-    BoxWithConstraints(Modifier.fillMaxSize().drawBehind { drawRect(Color.Transparent, blendMode = BlendMode.Clear) }) {
+    BoxWithConstraints(
+        Modifier.fillMaxSize().drawBehind { drawRect(Color.Transparent, blendMode = BlendMode.Clear) }
+            .onPreviewKeyEvent { event ->
+                val code = event.nativeKeyEvent.keyCode
+                val menuKey = code == android.view.KeyEvent.KEYCODE_BUTTON_Y || code == android.view.KeyEvent.KEYCODE_MENU
+                if (menuKey && event.type == KeyEventType.KeyUp) options = true
+                menuKey
+            },
+    ) {
         val dockHeight = 96.dp
         val gridHeight = maxHeight - dockHeight
         val tile = gridHeight / (SHELF_ROWS + (SHELF_ROWS + 1) * SHELF_GAP)
         val gap = tile * SHELF_GAP
         if (entries.isEmpty()) {
             Text(
-                stringResource(R.string.home_shelf_empty), color = Color.White.copy(alpha = 0.85f), fontSize = 18.sp, textAlign = TextAlign.Center,
+                stringResource(if (installedOnly) R.string.home_shelf_empty_installed else R.string.home_shelf_empty), color = Color.White.copy(alpha = 0.85f), fontSize = 18.sp, textAlign = TextAlign.Center,
                 modifier = Modifier.align(Alignment.Center).padding(bottom = dockHeight).padding(horizontal = 48.dp),
             )
         } else LazyHorizontalGrid(
@@ -182,8 +218,34 @@ internal fun HomeShelf(s: FrontEndState, a: FrontEndActions) {
                 ShelfTile(e, tile, if (i == start) Modifier.focusRequester(tileFocus) else Modifier) { open(e) }
             }
         }
-        ShelfDock(s, a, dockFocus, Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(dockHeight))
+        ShelfDock(s, a, dockFocus, { options = true }, Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(dockHeight))
     }
+    if (options) ShelfOptionsDialog(installedOnly, onPick = { ShelfPrefs.setInstalledOnly(ctx, it); options = false }) { options = false }
+}
+
+@Composable
+private fun ShelfOptionsDialog(installedOnly: Boolean, onPick: (Boolean) -> Unit, onDismiss: () -> Unit) {
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.home_shelf_options)) },
+        text = {
+            androidx.compose.foundation.layout.Column(
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+                modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
+            ) {
+                for ((value, label) in listOf(false to R.string.home_shelf_favorites, true to R.string.home_shelf_installed)) {
+                    androidx.compose.material3.TextButton(onClick = { onPick(value) }, modifier = Modifier.focusGlide(androidx.compose.foundation.shape.CircleShape)) {
+                        Text((if (value == installedOnly) "\u2713  " else "     ") + stringResource(label))
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            androidx.compose.material3.TextButton(onClick = onDismiss, modifier = Modifier.focusGlide(androidx.compose.foundation.shape.CircleShape)) {
+                Text(stringResource(R.string.common_cancel))
+            }
+        },
+    )
 }
 
 @Composable
@@ -218,10 +280,10 @@ private fun ShelfTile(e: LibraryEntry, size: Dp, focus: Modifier, onOpen: () -> 
     }
 }
 
-private enum class DockGlyph { LIBRARY, STORES, APPS, SETTINGS, STEAM }
+private enum class DockGlyph { LIBRARY, STORES, APPS, SETTINGS, STEAM, MENU }
 
 @Composable
-private fun ShelfDock(s: FrontEndState, a: FrontEndActions, first: FocusRequester, modifier: Modifier) {
+private fun ShelfDock(s: FrontEndState, a: FrontEndActions, first: FocusRequester, onOptions: () -> Unit, modifier: Modifier) {
     val items = listOf(
         Triple(DockGlyph.LIBRARY, R.string.rail_games) { ShelfState.leave("games") },
         Triple(DockGlyph.STORES, R.string.rail_stores) { ShelfState.leave("stores") },
@@ -229,9 +291,14 @@ private fun ShelfDock(s: FrontEndState, a: FrontEndActions, first: FocusRequeste
         Triple(DockGlyph.SETTINGS, R.string.rail_setup) { ShelfState.leave("setup") },
         Triple(DockGlyph.STEAM, R.string.rail_steam) { if (s.ready) a.onPlay() else ShelfState.leave("steam") },
     )
-    Row(modifier, horizontalArrangement = Arrangement.spacedBy(22.dp, Alignment.CenterHorizontally), verticalAlignment = Alignment.CenterVertically) {
-        items.forEachIndexed { i, (glyph, label, action) ->
-            DockItem(glyph, stringResource(label), if (i == 0) Modifier.focusRequester(first) else Modifier, action)
+    Box(modifier) {
+        Row(Modifier.align(Alignment.Center), horizontalArrangement = Arrangement.spacedBy(22.dp), verticalAlignment = Alignment.CenterVertically) {
+            items.forEachIndexed { i, (glyph, label, action) ->
+                DockItem(glyph, stringResource(label), if (i == 0) Modifier.focusRequester(first) else Modifier, action)
+            }
+        }
+        Box(Modifier.align(Alignment.CenterEnd).padding(end = 28.dp)) {
+            DockItem(DockGlyph.MENU, stringResource(R.string.home_shelf_options), Modifier, onOptions)
         }
     }
 }
@@ -277,6 +344,11 @@ private fun DrawScope.drawGlyph(glyph: DockGlyph, color: Color) {
             circle(24f, 24f, 6f)
             line(24f, 5f, 24f, 11f); line(24f, 37f, 24f, 43f); line(5f, 24f, 11f, 24f); line(37f, 24f, 43f, 24f)
             line(10.6f, 10.6f, 14.8f, 14.8f); line(33.2f, 33.2f, 37.4f, 37.4f); line(10.6f, 37.4f, 14.8f, 33.2f); line(33.2f, 14.8f, 37.4f, 10.6f)
+        }
+        DockGlyph.MENU -> {
+            drawRoundRect(color, p(7f, 9f), Size(34f * u, 8f * u), CornerRadius(4f * u), style = stroke)
+            drawRoundRect(color, p(7f, 20f), Size(34f * u, 8f * u), CornerRadius(4f * u), style = stroke)
+            drawRoundRect(color, p(7f, 31f), Size(34f * u, 8f * u), CornerRadius(4f * u), style = stroke)
         }
         DockGlyph.STEAM -> {
             line(10f, 34f, 22f, 26f)
