@@ -1478,6 +1478,10 @@
     <string name="content_android_apps">Android apps</string>
     <string name="home_page_shelf" translatable="false">Shelf</string>
     <string name="home_shelf_empty" translatable="false">Favourite games in the Library to put them on your shelf.</string>
+    <string name="home_shelf_empty_installed" translatable="false">No installed games found.</string>
+    <string name="home_shelf_options" translatable="false">Shelf</string>
+    <string name="home_shelf_favorites" translatable="false">Favourites</string>
+    <string name="home_shelf_installed" translatable="false">Everything installed</string>
     <string name="content_apps_count">%1$d apps</string>
     <string name="content_no_android_apps">No launchable Android apps found.</string>
     <string name="apps_search_hint">Search apps</string>
