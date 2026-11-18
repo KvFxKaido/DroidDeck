@@ -1135,7 +1135,7 @@ internal fun ManageStoresChip() {
     ) { Icon(Icons.Filled.Tune, label, tint = if (hot) colors.onBackground else colors.onSurfaceVariant, modifier = Modifier.size(20.dp)) }
 }
 
-private fun entryArt(context: android.content.Context, e: LibraryEntry, tall: Boolean): Any? {
+internal fun entryArt(context: android.content.Context, e: LibraryEntry, tall: Boolean): Any? {
     if (e.app != null) return LibraryArt.art(context, e.key, tall) ?: e.app.icon
     if (e.rom != null) return LibraryArt.art(context, e.key, tall) ?: e.rom.art
     val inst = e.storeKey?.let { k -> StoresState.installed.firstOrNull { it.key == k } }
