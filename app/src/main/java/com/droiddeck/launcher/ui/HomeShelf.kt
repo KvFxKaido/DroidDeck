@@ -141,7 +141,7 @@ internal fun HomeShelf(s: FrontEndState, a: FrontEndActions) {
     remember { EntryNames.load(ctx) }
     var renaming by remember { mutableStateOf<LibraryEntry?>(null) }
     var options by remember { mutableStateOf(false) }
-    var focusedEntry by remember { mutableStateOf<LibraryEntry?>(null) }
+    var itemMenu by remember { mutableStateOf<LibraryEntry?>(null) }
     var artFor by remember { mutableStateOf<LibraryEntry?>(null) }
     LaunchedEffect(Unit) { StoresState.refresh(ctx) }
     LaunchedEffect(s.romsDir) { AndroidRoms.refresh(ctx, s.romsDir) }
@@ -208,10 +208,9 @@ internal fun HomeShelf(s: FrontEndState, a: FrontEndActions) {
     BoxWithConstraints(
         Modifier.fillMaxSize().drawBehind { drawRect(Color.Transparent, blendMode = BlendMode.Clear) }
             .onPreviewKeyEvent { event ->
-                val code = event.nativeKeyEvent.keyCode
-                val menuKey = code == android.view.KeyEvent.KEYCODE_BUTTON_Y || code == android.view.KeyEvent.KEYCODE_MENU
-                if (menuKey && event.type == KeyEventType.KeyUp) options = true
-                menuKey
+                val start = event.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_BUTTON_START
+                if (start && event.type == KeyEventType.KeyUp) options = true
+                start
             },
     ) {
         val dockHeight = 96.dp
@@ -230,17 +229,30 @@ internal fun HomeShelf(s: FrontEndState, a: FrontEndActions) {
             horizontalArrangement = Arrangement.spacedBy(gap), verticalArrangement = Arrangement.spacedBy(gap),
         ) {
             itemsIndexed(entries, key = { _, e -> e.key }) { i, e ->
-                ShelfTile(e, tile, if (i == start) Modifier.focusRequester(tileFocus) else Modifier, onFocused = { focusedEntry = e }, onArt = { artFor = e }) { open(e) }
+                ShelfTile(e, tile, if (i == start) Modifier.focusRequester(tileFocus) else Modifier, onMenu = { itemMenu = e }) { open(e) }
             }
         }
         ShelfDock(s, a, dockFocus, { options = true }, Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(dockHeight))
     }
-    if (options) ShelfOptionsDialog(
-        installedOnly, focusedEntry?.title,
-        onArt = { options = false; artFor = focusedEntry },
-        onRename = { options = false; renaming = focusedEntry },
-        onPick = { ShelfPrefs.setInstalledOnly(ctx, it); options = false },
+    if (options) ShelfMenu(
+        stringResource(R.string.home_shelf_options),
+        listOf(
+            ShelfMenuRow(stringResource(R.string.home_shelf_favorites), checked = !installedOnly) { ShelfPrefs.setInstalledOnly(ctx, false); options = false },
+            ShelfMenuRow(stringResource(R.string.home_shelf_installed), checked = installedOnly) { ShelfPrefs.setInstalledOnly(ctx, true); options = false },
+        ),
     ) { options = false }
+    itemMenu?.let { e ->
+        val favorite = e.favoriteKey in LibraryFavorites.keys
+        ShelfMenu(
+            e.title,
+            listOf(
+                ShelfMenuRow(stringResource(R.string.home_shelf_artwork)) { itemMenu = null; artFor = e },
+                ShelfMenuRow(stringResource(R.string.home_shelf_rename_item)) { itemMenu = null; renaming = e },
+                ShelfMenuRow(stringResource(if (favorite) R.string.fm_favorite_remove else R.string.fm_favorite_add)) { itemMenu = null; LibraryFavorites.toggle(ctx, e.favoriteKey) },
+                ShelfMenuRow(stringResource(R.string.home_shelf_open_library)) { itemMenu = null; ShelfState.leave(if (e.app != null || e.rom != null) "games" else e.key) },
+            ),
+        ) { itemMenu = null }
+    }
     artFor?.let { e -> ShelfArtChooser(e) { artFor = null } }
     renaming?.let { e ->
         ShelfRenameDialog(e.title, renamed = e.key in entryNames, onSave = { name ->
@@ -316,25 +328,36 @@ private fun ShelfArtChooser(e: LibraryEntry, onClose: () -> Unit) {
     ) {}
 }
 
+internal class ShelfMenuRow(val label: String, val checked: Boolean? = null, val onClick: () -> Unit)
+
+// One menu style for the whole shelf: the Shelf menu and every item menu.
 @Composable
-private fun ShelfOptionsDialog(installedOnly: Boolean, artTitle: String?, onArt: () -> Unit, onRename: () -> Unit, onPick: (Boolean) -> Unit, onDismiss: () -> Unit) {
+private fun ShelfMenu(title: String, rows: List<ShelfMenuRow>, onDismiss: () -> Unit) {
+    val first = remember { FocusRequester() }
+    LaunchedEffect(Unit) {
+        repeat(10) {
+            androidx.compose.runtime.withFrameNanos { }
+            if (runCatching { first.requestFocus() }.isSuccess) return@LaunchedEffect
+        }
+    }
     androidx.compose.material3.AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.home_shelf_options)) },
+        title = { Text(title, maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis) },
         text = {
             androidx.compose.foundation.layout.Column(
-                verticalArrangement = Arrangement.spacedBy(4.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
                 modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
             ) {
-                if (artTitle != null) androidx.compose.material3.TextButton(onClick = onArt, modifier = Modifier.focusGlide(androidx.compose.foundation.shape.CircleShape)) {
-                    Text(stringResource(R.string.home_shelf_art_for, artTitle))
-                }
-                if (artTitle != null) androidx.compose.material3.TextButton(onClick = onRename, modifier = Modifier.focusGlide(androidx.compose.foundation.shape.CircleShape)) {
-                    Text(stringResource(R.string.home_shelf_rename_for, artTitle))
-                }
-                for ((value, label) in listOf(false to R.string.home_shelf_favorites, true to R.string.home_shelf_installed)) {
-                    androidx.compose.material3.TextButton(onClick = { onPick(value) }, modifier = Modifier.focusGlide(androidx.compose.foundation.shape.CircleShape)) {
-                        Text((if (value == installedOnly) "\u2713  " else "     ") + stringResource(label))
+                rows.forEachIndexed { i, row ->
+                    androidx.compose.material3.TextButton(
+                        onClick = row.onClick,
+                        modifier = Modifier.fillMaxWidth().then(if (i == 0) Modifier.focusRequester(first) else Modifier)
+                            .focusGlide(androidx.compose.foundation.shape.RoundedCornerShape(12.dp)),
+                    ) {
+                        Text(
+                            when (row.checked) { true -> "\u2713  "; false -> "     "; null -> "" } + row.label,
+                            modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Start,
+                        )
                     }
                 }
             }
@@ -349,7 +372,7 @@ private fun ShelfOptionsDialog(installedOnly: Boolean, artTitle: String?, onArt:
 
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
-private fun ShelfTile(e: LibraryEntry, size: Dp, focus: Modifier, onFocused: () -> Unit, onArt: () -> Unit, onOpen: () -> Unit) {
+private fun ShelfTile(e: LibraryEntry, size: Dp, focus: Modifier, onMenu: () -> Unit, onOpen: () -> Unit) {
     val ctx = LocalContext.current
     var focused by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(if (focused) 1.08f else 1f, label = "shelfTile")
@@ -362,8 +385,9 @@ private fun ShelfTile(e: LibraryEntry, size: Dp, focus: Modifier, onFocused: () 
             .clip(shape).background(Color(0xFF161616))
             .semantics { contentDescription = e.title }
             .then(focus)
-            .onFocusChanged { focused = it.isFocused; if (it.isFocused) onFocused() }
-            .combinedClickable(role = Role.Button, onClick = onOpen, onLongClick = onArt)
+            .onFocusChanged { focused = it.isFocused }
+            .combinedClickable(role = Role.Button, onClick = onOpen, onLongClick = onMenu)
+            .menuKey(onMenu)
             .controllerConfirm(onClick = onOpen),
     ) {
         when (art) {
