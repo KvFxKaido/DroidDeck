@@ -43,11 +43,15 @@ internal fun ShelfSpike(navigate: String?, onNavigated: () -> Unit) {
     DisposableEffect(activity) {
         val window = activity?.window
         val before = window?.decorView?.background
+        val format = window?.attributes?.format
+        // An opaque surface keeps the last front-end frame where nothing is drawn, so the wallpaper never shows.
+        window?.setFormat(android.graphics.PixelFormat.TRANSLUCENT)
         window?.addFlags(WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER)
         window?.setBackgroundDrawable(ColorDrawable(android.graphics.Color.TRANSPARENT))
         onDispose {
             window?.clearFlags(WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER)
             window?.setBackgroundDrawable(before ?: ColorDrawable(android.graphics.Color.BLACK))
+            if (format != null) window.setFormat(format)
         }
     }
     LaunchedEffect(navigate) {
