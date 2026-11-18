@@ -1485,6 +1485,12 @@
     <string name="home_shelf_artwork" translatable="false">Artwork…</string>
     <string name="home_shelf_rename_item" translatable="false">Rename…</string>
     <string name="home_shelf_open_library" translatable="false">Open in Library</string>
+    <string name="home_dock_add" translatable="false">Add to dock…</string>
+    <string name="home_dock_add_title" translatable="false">Add to dock</string>
+    <string name="home_dock_icon" translatable="false">Icon…</string>
+    <string name="home_dock_move_left" translatable="false">Move left</string>
+    <string name="home_dock_move_right" translatable="false">Move right</string>
+    <string name="home_dock_remove" translatable="false">Remove from dock</string>
     <string name="home_shelf_rename" translatable="false">Rename</string>
     <string name="home_shelf_rename_save" translatable="false">Save</string>
     <string name="home_shelf_rename_reset" translatable="false">Use the original name</string>
