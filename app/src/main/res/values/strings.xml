@@ -1504,8 +1504,9 @@
     <string name="home_shelf_options" translatable="false">Shelf</string>
     <string name="home_shelf_favorites" translatable="false">Favourites</string>
     <string name="home_shelf_installed" translatable="false">Everything installed</string>
-    <string name="home_shelf_art_for" translatable="false">Artwork for %1$s</string>
-    <string name="home_shelf_rename_for" translatable="false">Rename %1$s</string>
+    <string name="home_shelf_artwork" translatable="false">Artwork…</string>
+    <string name="home_shelf_rename_item" translatable="false">Rename…</string>
+    <string name="home_shelf_open_library" translatable="false">Open in Library</string>
     <string name="home_shelf_rename" translatable="false">Rename</string>
     <string name="home_shelf_rename_save" translatable="false">Save</string>
     <string name="home_shelf_rename_reset" translatable="false">Use the original name</string>
