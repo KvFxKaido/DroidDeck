@@ -1495,6 +1495,7 @@
     <string name="ctrl_edit">Edit</string>
     <string name="ctrl_reset">Reset</string>
     <string name="content_android_apps">Android apps</string>
+    <string name="home_page_shelf" translatable="false">Shelf</string>
     <string name="content_apps_count">%1$d apps</string>
     <string name="content_no_android_apps">No launchable Android apps found.</string>
     <string name="apps_search_hint">Search apps</string>

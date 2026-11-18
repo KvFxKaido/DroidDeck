@@ -468,7 +468,7 @@ fun FrontEndScreen(s: FrontEndState, a: FrontEndActions, page: (@Composable () -
             LocalNarrowPane provides (maxWidth < NarrowPaneWidth),
             androidx.compose.ui.platform.LocalTextInputService provides (if (s.dualScreen) bottomTextInput else textInput),
             LocalBottomTyping provides s.dualScreen,
-        ) { FrontEndScreenBody(s, a, page, frontFocus) }
+        ) { if (ShelfState.showing) ShelfSpike(s.navigate, a.onNavigated) else FrontEndScreenBody(s, a, page, frontFocus) }
         DownloadFlights()
     }
 }
@@ -488,6 +488,7 @@ private fun FrontEndScreenBody(s: FrontEndState, a: FrontEndActions, page: (@Com
             "stores:downloads" -> selected = "downloads"
             "components" -> a.onComponents(true)
             "setup:launcher" -> { SetupTabs.openLauncher = true; selected = "setup" }
+            com.droiddeck.launcher.core.AppUiPrefs.HOME_PAGE_SHELF -> ShelfState.showing = true
             com.droiddeck.launcher.sync.SyncthingService.NAV -> com.droiddeck.launcher.sync.Syncthing.requestOpen()
             "setup:integration" -> { SetupTabs.openOverview = true; selected = "setup" }
             in SETTINGS_NAV -> { SetupTabs.openSection = SettingsSection.of(target.removePrefix("settings:")) ?: SettingsSection.OVERVIEW; selected = "setup" }

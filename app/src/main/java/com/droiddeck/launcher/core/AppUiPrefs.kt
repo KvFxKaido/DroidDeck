@@ -29,10 +29,12 @@ object AppUiPrefs {
 
     const val HOME_PAGE_STEAM = "steam"
     const val HOME_PAGE_APPS = "android-apps"
+    const val HOME_PAGE_SHELF = "shelf"
 
     val homePageOptions = listOf(
         HOME_PAGE_STEAM to R.string.rail_steam,
         HOME_PAGE_APPS to R.string.content_android_apps,
+        HOME_PAGE_SHELF to R.string.home_page_shelf,
     )
 
     fun homePage(context: Context): String =
