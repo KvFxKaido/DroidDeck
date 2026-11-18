@@ -1504,6 +1504,7 @@
     <string name="home_shelf_options" translatable="false">Shelf</string>
     <string name="home_shelf_favorites" translatable="false">Favourites</string>
     <string name="home_shelf_installed" translatable="false">Everything installed</string>
+    <string name="home_shelf_art_for" translatable="false">Artwork for %1$s</string>
     <string name="content_apps_count">%1$d apps</string>
     <string name="content_no_android_apps">No launchable Android apps found.</string>
     <string name="apps_search_hint">Search apps</string>
