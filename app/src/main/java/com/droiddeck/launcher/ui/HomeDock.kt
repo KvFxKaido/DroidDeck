@@ -14,10 +14,14 @@ internal object DockPrefs {
     val DEFAULT = PAGES.map { "page:$it" }
 
     private const val POPOUT = "popout:"
+    private const val NAME = "name:"
+    const val PAGE_ICON_PACKAGE = "droiddeck.dock"
 
     var items by mutableStateOf(DEFAULT)
         private set
     var popouts by mutableStateOf<Map<String, List<String>>>(emptyMap())
+        private set
+    var names by mutableStateOf<Map<String, String>>(emptyMap())
         private set
     private var loaded = false
 
@@ -29,7 +33,21 @@ internal object DockPrefs {
         popouts = prefs.all.mapNotNull { (k, v) ->
             if (!k.startsWith(POPOUT)) null else (v as? String)?.let { popoutParse(it) }?.takeIf { it.isNotEmpty() }?.let { k.removePrefix(POPOUT) to it }
         }.toMap()
+        names = prefs.all.mapNotNull { (k, v) ->
+            if (!k.startsWith(NAME)) null else (v as? String)?.takeIf { it.isNotBlank() }?.let { k.removePrefix(NAME) to it }
+        }.toMap()
     }
+
+    fun setName(context: Context, id: String, name: String?) {
+        val value = name?.trim()?.takeIf { it.isNotEmpty() }
+        names = if (value == null) names - id else names + (id to value)
+        val edit = context.getSharedPreferences(FILE, Context.MODE_PRIVATE).edit()
+        if (value == null) edit.remove(NAME + id) else edit.putString(NAME + id, value)
+        edit.apply()
+    }
+
+    fun removeFromPopout(context: Context, itemId: String, id: String) =
+        savePopout(context, itemId, popouts[itemId].orEmpty() - id)
 
     fun add(context: Context, id: String) = save(context, dockAdd(items, id))
 
@@ -71,7 +89,12 @@ internal fun dockParse(raw: String?): List<String> {
 
 internal fun dockAdd(list: List<String>, id: String): List<String> = if (id in list) list else list + id
 
-internal fun popoutParse(raw: String): List<String> = raw.split('\n').map { it.trim() }.filter { dockApp(it) != null }.distinct()
+internal fun popoutParse(raw: String): List<String> =
+    raw.split('\n').map { it.trim() }.filter { dockApp(it) != null || dockPage(it) in DockPrefs.PAGES }.distinct()
+
+// DroidDeck's per-app icon picker keys its choices by package/class; dock pages borrow a package name of their own.
+internal fun pageIconApp(page: String, label: String) =
+    com.droiddeck.launcher.HomeApp.LaunchableApp(label, DockPrefs.PAGE_ICON_PACKAGE, page, null)
 
 internal fun popoutToggle(list: List<String>, appId: String): List<String> = if (appId in list) list - appId else list + appId
 

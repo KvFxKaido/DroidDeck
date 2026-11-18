@@ -36,7 +36,8 @@ class HomeDockTest {
         val two = popoutToggle(one, "app:com.facebook.orca/.Main")
         assertEquals(listOf("app:com.google.android.gm/.Main", "app:com.facebook.orca/.Main"), two)
         assertEquals(listOf("app:com.facebook.orca/.Main"), popoutToggle(two, "app:com.google.android.gm/.Main"))
-        assertEquals(two, popoutParse(two.joinToString("\n") + "\npage:games\napp:com.facebook.orca/.Main\n"))
+        assertEquals(two + "page:stores", popoutParse(two.joinToString("\n") + "\npage:stores\npage:nowhere\napp:com.facebook.orca/.Main\n"))
+        assertEquals("droiddeck.dock/stores", pageIconApp("stores", "Stores").key)
     }
 
     @Test
