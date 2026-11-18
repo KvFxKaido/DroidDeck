@@ -20,7 +20,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -78,6 +77,11 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import coil.compose.AsyncImage
 import com.droiddeck.launcher.HomeApp
+import com.droiddeck.launcher.HomeIcons
+import androidx.core.graphics.drawable.toBitmap
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.ui.input.pointer.positionChange
 import com.droiddeck.launcher.HomeLibrary
 import com.droiddeck.launcher.R
 import com.droiddeck.launcher.core.AppUiPrefs
@@ -155,6 +159,8 @@ internal fun HomeShelf(s: FrontEndState, a: FrontEndActions) {
     var addingToDock by remember { mutableStateOf(false) }
     var iconFor by remember { mutableStateOf<HomeApp.LaunchableApp?>(null) }
     var popoutFor by remember { mutableStateOf<DockSlot?>(null) }
+    var dockRenaming by remember { mutableStateOf<DockSlot?>(null) }
+    var rowMenu by remember { mutableStateOf<Pair<DockSlot, DockSlot>?>(null) }
     LaunchedEffect(Unit) { StoresState.refresh(ctx) }
     LaunchedEffect(s.romsDir) { AndroidRoms.refresh(ctx, s.romsDir) }
     val signedIn = Store.entries.filter { StoresState.isSignedIn(it) }
@@ -244,7 +250,7 @@ internal fun HomeShelf(s: FrontEndState, a: FrontEndActions) {
                 ShelfTile(e, tile, if (i == start) Modifier.focusRequester(tileFocus) else Modifier, onMenu = { itemMenu = e }) { open(e) }
             }
         }
-        ShelfDock(s, a, dockFocus, { options = true }, { dockMenu = it }, Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(dockHeight))
+        ShelfDock(s, a, dockFocus, { options = true }, { dockMenu = it }, { parent, row -> rowMenu = parent to row }, Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(dockHeight))
     }
     if (options) ShelfMenu(
         stringResource(R.string.home_shelf_options),
@@ -256,17 +262,37 @@ internal fun HomeShelf(s: FrontEndState, a: FrontEndActions) {
     ) { options = false }
     dockMenu?.let { slot ->
         val at = DockPrefs.items.indexOf(slot.id)
-        val app = slot.app
         ShelfMenu(
             slot.label,
             listOfNotNull(
-                app?.let { ShelfMenuRow(stringResource(R.string.home_dock_icon)) { dockMenu = null; iconFor = it } },
+                ShelfMenuRow(stringResource(R.string.home_dock_icon)) { dockMenu = null; iconFor = slot.iconApp },
+                ShelfMenuRow(stringResource(R.string.home_dock_icon_default)) { HomeIcons.clear(ctx, slot.iconApp.key); dockMenu = null }
+                    .takeIf { slot.iconApp.key in HomeIcons.overrides },
+                ShelfMenuRow(stringResource(R.string.home_shelf_rename_item)) { dockMenu = null; dockRenaming = slot },
                 ShelfMenuRow(stringResource(R.string.home_dock_popout)) { dockMenu = null; popoutFor = slot },
                 ShelfMenuRow(stringResource(R.string.home_dock_move_left)) { DockPrefs.move(ctx, slot.id, -1); dockMenu = null }.takeIf { at > 0 },
                 ShelfMenuRow(stringResource(R.string.home_dock_move_right)) { DockPrefs.move(ctx, slot.id, 1); dockMenu = null }.takeIf { at in 0 until DockPrefs.items.lastIndex },
                 ShelfMenuRow(stringResource(R.string.home_dock_remove)) { DockPrefs.remove(ctx, slot.id); dockMenu = null }.takeIf { slot.id != DockPrefs.LIBRARY },
             ),
         ) { dockMenu = null }
+    }
+    rowMenu?.let { (parent, row) ->
+        ShelfMenu(
+            row.label,
+            listOfNotNull(
+                ShelfMenuRow(stringResource(R.string.home_dock_icon)) { rowMenu = null; iconFor = row.iconApp },
+                ShelfMenuRow(stringResource(R.string.home_dock_icon_default)) { HomeIcons.clear(ctx, row.iconApp.key); rowMenu = null }
+                    .takeIf { row.iconApp.key in HomeIcons.overrides },
+                ShelfMenuRow(stringResource(R.string.home_shelf_rename_item)) { rowMenu = null; dockRenaming = row },
+                ShelfMenuRow(stringResource(R.string.home_dock_popout_remove, parent.label)) { DockPrefs.removeFromPopout(ctx, parent.id, row.id); rowMenu = null },
+            ),
+        ) { rowMenu = null }
+    }
+    dockRenaming?.let { slot ->
+        ShelfRenameDialog(slot.label, renamed = slot.id in DockPrefs.names, onSave = { name ->
+            dockRenaming = null
+            DockPrefs.setName(ctx, slot.id, name)
+        }) { dockRenaming = null }
     }
     if (addingToDock) {
         val inDock = DockPrefs.items.toSet()
@@ -281,11 +307,14 @@ internal fun HomeShelf(s: FrontEndState, a: FrontEndActions) {
     iconFor?.let { app -> AppIconPicker(app, 24.dp) { iconFor = null } }
     popoutFor?.let { slot ->
         val chosen = DockPrefs.popouts[slot.id].orEmpty()
-        val rows = s.androidApps.filter { appDockId(it.packageName, it.className) != slot.id }.sortedBy { it.label.lowercase() }.map { app ->
+        val pages = DockPrefs.PAGES.map { "page:$it" }.filter { it != slot.id }.map { id ->
+            ShelfMenuRow(stringResource(dockPageLabel(dockPage(id).orEmpty())), checked = id in chosen) { DockPrefs.togglePopout(ctx, slot.id, id) }
+        }
+        val apps = s.androidApps.filter { appDockId(it.packageName, it.className) != slot.id }.sortedBy { it.label.lowercase() }.map { app ->
             val id = appDockId(app.packageName, app.className)
             ShelfMenuRow(app.label, checked = id in chosen) { DockPrefs.togglePopout(ctx, slot.id, id) }
         }
-        ShelfMenu(stringResource(R.string.home_dock_popout_title, slot.label), rows, confirm = stringResource(R.string.home_dock_done)) { popoutFor = null }
+        ShelfMenu(stringResource(R.string.home_dock_popout_title, slot.label), pages + apps, confirm = stringResource(R.string.home_dock_done)) { popoutFor = null }
     }
     itemMenu?.let { e ->
         val favorite = e.favoriteKey in LibraryFavorites.keys
@@ -470,21 +499,51 @@ private fun dockPageLabel(page: String): Int = when (page) {
     else -> R.string.rail_steam
 }
 
-private class DockSlot(val id: String, val label: String, val glyph: DockGlyph?, val app: HomeApp.LaunchableApp?)
+private class DockSlot(val id: String, val label: String, val glyph: DockGlyph?, val app: HomeApp.LaunchableApp?, val icon: Bitmap?, val iconApp: HomeApp.LaunchableApp)
+
+private fun dockResolvable(id: String, apps: List<HomeApp.LaunchableApp>): Boolean {
+    val component = dockApp(id)
+    return dockPage(id)?.let { dockPageGlyph(it) != null } ?: (component != null && apps.any { it.packageName == component.first && it.className == component.second })
+}
 
 @Composable
-private fun ShelfDock(s: FrontEndState, a: FrontEndActions, first: FocusRequester, onOptions: () -> Unit, onMenu: (DockSlot) -> Unit, modifier: Modifier) {
-    val slots = DockPrefs.items.mapNotNull { id ->
-        val page = dockPage(id)
-        val component = dockApp(id)
-        when {
-            page != null -> dockPageGlyph(page)?.let { DockSlot(id, stringResource(dockPageLabel(page)), it, null) }
-            component != null -> s.androidApps.firstOrNull { it.packageName == component.first && it.className == component.second }?.let { DockSlot(id, it.label, null, it) }
-            else -> null
+private fun rememberDockSlot(id: String, s: FrontEndState): DockSlot? {
+    val page = dockPage(id)
+    val component = dockApp(id)
+    val name = DockPrefs.names[id]
+    if (page != null) {
+        val glyph = dockPageGlyph(page) ?: return null
+        val label = stringResource(dockPageLabel(page))
+        val iconApp = remember(page, label) { pageIconApp(page, label) }
+        return DockSlot(id, name ?: label, glyph, null, rememberPageIcon(iconApp.key), iconApp)
+    }
+    if (component == null) return null
+    val app = s.androidApps.firstOrNull { it.packageName == component.first && it.className == component.second } ?: return null
+    return DockSlot(id, name ?: app.label, null, app, app.icon, app)
+}
+
+@Composable
+private fun rememberPageIcon(key: String): Bitmap? {
+    val ctx = LocalContext.current
+    val choice = HomeIcons.overrides[key]
+    val px = with(androidx.compose.ui.platform.LocalDensity.current) { 48.dp.roundToPx() }
+    val icon by androidx.compose.runtime.produceState<Bitmap?>(null, choice) {
+        value = choice?.let { c ->
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                runCatching { com.droiddeck.launcher.IconPack.drawable(ctx, c.pack, c.drawable, ctx.resources.displayMetrics.densityDpi)?.toBitmap(px, px) }.getOrNull()
+            }
         }
     }
+    return icon
+}
+
+@Composable
+private fun ShelfDock(
+    s: FrontEndState, a: FrontEndActions, first: FocusRequester, onOptions: () -> Unit, onMenu: (DockSlot) -> Unit,
+    onRowMenu: (DockSlot, DockSlot) -> Unit, modifier: Modifier,
+) {
+    val ctx = LocalContext.current
     var open by remember { mutableStateOf<String?>(null) }
-    val launchApp: (HomeApp.LaunchableApp) -> Unit = { a.onAndroidApp(it, null) }
     val activate: (DockSlot) -> Unit = { slot ->
         val app = slot.app
         when {
@@ -493,51 +552,94 @@ private fun ShelfDock(s: FrontEndState, a: FrontEndActions, first: FocusRequeste
             else -> ShelfState.leave(dockPage(slot.id))
         }
     }
+    val firstId = DockPrefs.items.firstOrNull { dockResolvable(it, s.androidApps) }
+    val step = with(androidx.compose.ui.platform.LocalDensity.current) { (64.dp + DOCK_SPACING).toPx() }
     Box(modifier) {
-        Row(Modifier.align(Alignment.Center), horizontalArrangement = Arrangement.spacedBy(22.dp), verticalAlignment = Alignment.CenterVertically) {
-            slots.forEachIndexed { i, slot ->
-                key(slot.id) {
-                    val inside = DockPrefs.popouts[slot.id].orEmpty().mapNotNull { id ->
-                        dockApp(id)?.let { (pkg, cls) -> s.androidApps.firstOrNull { it.packageName == pkg && it.className == cls } }
+        Row(Modifier.align(Alignment.Center), horizontalArrangement = Arrangement.spacedBy(DOCK_SPACING), verticalAlignment = Alignment.CenterVertically) {
+            DockPrefs.items.forEach { id ->
+                key(id) {
+                    val slot = rememberDockSlot(id, s)
+                    if (slot != null) {
+                        val inside = DockPrefs.popouts[id].orEmpty()
+                        val hasPopout = inside.any { dockResolvable(it, s.androidApps) }
+                        DockItem(
+                            slot.glyph, slot.icon, slot.label, if (id == firstId) Modifier.focusRequester(first) else Modifier,
+                            step = step,
+                            onMenu = { onMenu(slot) },
+                            onPopout = if (!hasPopout) null else ({ open = if (open == id) null else id }),
+                            onDragStep = { delta -> DockPrefs.move(ctx, id, delta) },
+                            anchored = {
+                                if (open == id && hasPopout) DockPopout(slot, inside, s,
+                                    onHeader = { open = null; activate(slot) },
+                                    onRow = { row -> open = null; activate(row) },
+                                    onRowMenu = { row -> open = null; onRowMenu(slot, row) },
+                                ) { open = null }
+                            },
+                        ) { activate(slot) }
                     }
-                    DockItem(
-                        slot.glyph, slot.app?.icon, slot.label, if (i == 0) Modifier.focusRequester(first) else Modifier,
-                        onMenu = { onMenu(slot) },
-                        onPopout = if (inside.isEmpty()) null else ({ open = if (open == slot.id) null else slot.id }),
-                        anchored = {
-                            if (open == slot.id && inside.isNotEmpty()) DockPopout(slot, inside, onHeader = { open = null; activate(slot) }, onApp = { open = null; launchApp(it) }) { open = null }
-                        },
-                    ) { activate(slot) }
                 }
             }
         }
         Box(Modifier.align(Alignment.CenterStart).padding(start = 28.dp)) {
-            DockItem(DockGlyph.MENU, null, stringResource(R.string.home_shelf_options), Modifier, onMenu = null, onPopout = null, onClick = onOptions)
+            DockItem(DockGlyph.MENU, null, stringResource(R.string.home_shelf_options), Modifier, step = step, onMenu = null, onPopout = null, onDragStep = null, onClick = onOptions)
         }
     }
 }
 
+private val DOCK_SPACING = 22.dp
+
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 private fun DockItem(
-    glyph: DockGlyph?, icon: Bitmap?, label: String, focus: Modifier, onMenu: (() -> Unit)?, onPopout: (() -> Unit)?,
+    glyph: DockGlyph?, icon: Bitmap?, label: String, focus: Modifier, step: Float,
+    onMenu: (() -> Unit)?, onPopout: (() -> Unit)?, onDragStep: ((Int) -> Unit)?,
     anchored: @Composable () -> Unit = {}, onClick: () -> Unit,
 ) {
-    val swipe = with(androidx.compose.ui.platform.LocalDensity.current) { 40.dp.toPx() }
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val swipe = with(density) { 40.dp.toPx() }
+    val slop = with(density) { 12.dp.toPx() }
     var focused by remember { mutableStateOf(false) }
-    val scale by animateFloatAsState(if (focused) 1.1f else 1f, label = "shelfDock")
+    var drag by remember { mutableStateOf(0f) }
+    val scale by animateFloatAsState(if (focused || drag != 0f) 1.1f else 1f, label = "shelfDock")
+    val popout by androidx.compose.runtime.rememberUpdatedState(onPopout)
+    val moved by androidx.compose.runtime.rememberUpdatedState(onDragStep)
     val shape = RoundedCornerShape(20.dp)
     Box(
-        Modifier.size(64.dp).graphicsLayer { scaleX = scale; scaleY = scale }
-            .then(if (focused) Modifier.background(Color.White.copy(alpha = 0.08f), shape).border(2.dp, SHELF_RING, shape) else Modifier)
+        Modifier.size(64.dp).zIndex(if (drag != 0f) 2f else 0f).graphicsLayer { scaleX = scale; scaleY = scale; translationX = drag }
+            .then(if (focused || drag != 0f) Modifier.background(Color.White.copy(alpha = 0.08f), shape).border(2.dp, SHELF_RING, shape) else Modifier)
             .clip(shape)
             .semantics { contentDescription = label }
             .then(focus)
             .onFocusChanged { focused = it.isFocused }
-            .then(if (onPopout == null) Modifier else Modifier.pointerInput(onPopout) {
-                var travel = 0f
-                detectVerticalDragGestures(onDragStart = { travel = 0f }, onDragEnd = { if (travel < -swipe) onPopout() }) { _, dy -> travel += dy }
-            }.onPreviewKeyEvent { event ->
+            // Sideways drags reorder the dock; an upward swipe opens the pop-out. Keyed on Unit so a reorder mid-drag does not restart the gesture.
+            .then(if (onDragStep == null && onPopout == null) Modifier else Modifier.pointerInput(Unit) {
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false)
+                    var dx = 0f
+                    var dy = 0f
+                    var steps = 0
+                    var mode = 0
+                    while (true) {
+                        val change = awaitPointerEvent().changes.firstOrNull { it.id == down.id } ?: break
+                        val d = change.positionChange()
+                        dx += d.x
+                        dy += d.y
+                        if (mode == 0 && (kotlin.math.abs(dx) > slop || kotlin.math.abs(dy) > slop)) {
+                            mode = if (kotlin.math.abs(dx) > kotlin.math.abs(dy)) (if (moved != null) 1 else 3) else (if (popout != null) 2 else 3)
+                        }
+                        if (mode == 1) {
+                            change.consume()
+                            val rest = dx - steps * step
+                            if (rest > step / 2) { steps++; moved?.invoke(1) } else if (rest < -step / 2) { steps--; moved?.invoke(-1) }
+                            drag = dx - steps * step
+                        } else if (mode == 2) change.consume()
+                        if (!change.pressed) break
+                    }
+                    if (mode == 2 && dy < -swipe) popout?.invoke()
+                    drag = 0f
+                }
+            })
+            .then(if (onPopout == null) Modifier else Modifier.onPreviewKeyEvent { event ->
                 val x = event.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_BUTTON_X
                 if (x && event.type == KeyEventType.KeyUp) onPopout()
                 x
@@ -570,7 +672,10 @@ private class AboveAnchor(private val gap: Int, private val margin: Int) : andro
 
 // Niagara-style: a card above the dock item; its header opens the item itself.
 @Composable
-private fun DockPopout(slot: DockSlot, apps: List<HomeApp.LaunchableApp>, onHeader: () -> Unit, onApp: (HomeApp.LaunchableApp) -> Unit, onDismiss: () -> Unit) {
+private fun DockPopout(
+    slot: DockSlot, inside: List<String>, s: FrontEndState,
+    onHeader: () -> Unit, onRow: (DockSlot) -> Unit, onRowMenu: (DockSlot) -> Unit, onDismiss: () -> Unit,
+) {
     val density = androidx.compose.ui.platform.LocalDensity.current
     val provider = remember(density) { with(density) { AboveAnchor(12.dp.roundToPx(), 16.dp.roundToPx()) } }
     val first = remember { FocusRequester() }
@@ -592,16 +697,22 @@ private fun DockPopout(slot: DockSlot, apps: List<HomeApp.LaunchableApp>, onHead
                     if (close && event.type == KeyEventType.KeyUp) onDismiss()
                     close
                 }
-                .verticalScroll(rememberScrollState()).padding(vertical = 10.dp),
+                .verticalScroll(rememberScrollState()).padding(top = 10.dp, bottom = 6.dp),
         ) {
-            PopoutRow(slot.app?.icon, slot.glyph, slot.label, header = true, focus = Modifier.focusRequester(first), onClick = onHeader)
-            apps.forEach { app -> key(app.key) { PopoutRow(app.icon, null, app.label, header = false, focus = Modifier, onClick = { onApp(app) }) } }
+            PopoutRow(slot.icon, slot.glyph, slot.label, header = true, focus = Modifier.focusRequester(first), onMenu = null, onClick = onHeader)
+            inside.forEach { id ->
+                key(id) {
+                    val row = rememberDockSlot(id, s)
+                    if (row != null) PopoutRow(row.icon, row.glyph, row.label, header = false, focus = Modifier, onMenu = { onRowMenu(row) }) { onRow(row) }
+                }
+            }
         }
     }
 }
 
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
-private fun PopoutRow(icon: Bitmap?, glyph: DockGlyph?, label: String, header: Boolean, focus: Modifier, onClick: () -> Unit) {
+private fun PopoutRow(icon: Bitmap?, glyph: DockGlyph?, label: String, header: Boolean, focus: Modifier, onMenu: (() -> Unit)?, onClick: () -> Unit) {
     var focused by remember { mutableStateOf(false) }
     val shape = RoundedCornerShape(16.dp)
     Row(
@@ -609,7 +720,8 @@ private fun PopoutRow(icon: Bitmap?, glyph: DockGlyph?, label: String, header: B
             .then(if (focused) Modifier.background(Color.White.copy(alpha = 0.08f), shape).border(2.dp, SHELF_RING, shape) else Modifier)
             .clip(shape).then(focus)
             .onFocusChanged { focused = it.isFocused }
-            .clickable(role = Role.Button, onClick = onClick)
+            .combinedClickable(role = Role.Button, onClick = onClick, onLongClick = onMenu)
+            .then(if (onMenu != null) Modifier.menuKey(onMenu) else Modifier)
             .controllerConfirm(onClick = onClick)
             .padding(horizontal = 12.dp, vertical = if (header) 8.dp else 10.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp),

@@ -1494,6 +1494,8 @@
     <string name="home_dock_popout" translatable="false">Pop-out apps…</string>
     <string name="home_dock_popout_title" translatable="false">Pop-out apps for %1$s</string>
     <string name="home_dock_done" translatable="false">Done</string>
+    <string name="home_dock_icon_default" translatable="false">Use the default icon</string>
+    <string name="home_dock_popout_remove" translatable="false">Remove from %1$s</string>
     <string name="home_shelf_rename" translatable="false">Rename</string>
     <string name="home_shelf_rename_save" translatable="false">Save</string>
     <string name="home_shelf_rename_reset" translatable="false">Use the original name</string>
