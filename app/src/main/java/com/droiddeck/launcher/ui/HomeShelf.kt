@@ -138,6 +138,8 @@ internal fun HomeShelf(s: FrontEndState, a: FrontEndActions) {
     remember { HomeLibrary.load(ctx) }
     remember { AndroidRoms.load(ctx) }
     remember { ShelfPrefs.load(ctx) }
+    remember { EntryNames.load(ctx) }
+    var renaming by remember { mutableStateOf<LibraryEntry?>(null) }
     var options by remember { mutableStateOf(false) }
     var focusedEntry by remember { mutableStateOf<LibraryEntry?>(null) }
     var artFor by remember { mutableStateOf<LibraryEntry?>(null) }
@@ -150,14 +152,18 @@ internal fun HomeShelf(s: FrontEndState, a: FrontEndActions) {
     val cloudRows = rememberXboxCloudRows(s)
     val favorites = LibraryFavorites.keys
     val installedOnly = ShelfPrefs.installedOnly
-    val entries = remember(s.steamGames, cloudRows, owned, installedStore, s.androidApps, HomeLibrary.added, HomeLibrary.removed, HomeLibrary.emulators, AndroidRoms.games, favorites, installedOnly) {
+    val entryNames = EntryNames.names
+    val entries = remember(s.steamGames, cloudRows, owned, installedStore, s.androidApps, HomeLibrary.added, HomeLibrary.removed, HomeLibrary.emulators, AndroidRoms.games, favorites, installedOnly, entryNames) {
         shelfEntries(
-            libraryEntries(s.steamGames + cloudRows, owned, installedStore) +
-                androidEntries(s.androidApps, HomeLibrary.added, HomeLibrary.removed, HomeLibrary.emulators) + romEntries(AndroidRoms.games),
+            renamedEntries(
+                libraryEntries(s.steamGames + cloudRows, owned, installedStore) +
+                    androidEntries(s.androidApps, HomeLibrary.added, HomeLibrary.removed, HomeLibrary.emulators) + romEntries(AndroidRoms.games),
+                entryNames,
+            ),
             favorites, installedOnly,
         )
     }
-    LaunchedEffect(entries.map { it.key }) {
+    LaunchedEffect(entries.map { it.key + "|" + it.title }) {
         ShelfArt.fetchAll(ctx, entries.map { e ->
             ShelfArt.Wanted(e.key, e.title, e.game?.takeIf { com.droiddeck.launcher.frontend.Library.fromSteamClient(it) }?.appId)
         })
@@ -232,9 +238,55 @@ internal fun HomeShelf(s: FrontEndState, a: FrontEndActions) {
     if (options) ShelfOptionsDialog(
         installedOnly, focusedEntry?.title,
         onArt = { options = false; artFor = focusedEntry },
+        onRename = { options = false; renaming = focusedEntry },
         onPick = { ShelfPrefs.setInstalledOnly(ctx, it); options = false },
     ) { options = false }
     artFor?.let { e -> ShelfArtChooser(e) { artFor = null } }
+    renaming?.let { e ->
+        ShelfRenameDialog(e.title, renamed = e.key in entryNames, onSave = { name ->
+            renaming = null
+            EntryNames.set(ctx, e.key, name)
+            ShelfArt.renamed(ctx, e.key)
+            com.droiddeck.launcher.frontend.LibraryArt.renamed(ctx, e.key)
+        }) { renaming = null }
+    }
+}
+
+@Composable
+private fun ShelfRenameDialog(current: String, renamed: Boolean, onSave: (String?) -> Unit, onDismiss: () -> Unit) {
+    var text by remember { mutableStateOf(current) }
+    val field = remember { FocusRequester() }
+    LaunchedEffect(Unit) { runCatching { field.requestFocus() } }
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.home_shelf_rename)) },
+        text = {
+            androidx.compose.foundation.layout.Column(
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
+            ) {
+                androidx.compose.material3.OutlinedTextField(
+                    text, { text = it }, singleLine = true,
+                    modifier = Modifier.fillMaxWidth().focusRequester(field).focusGlide(),
+                    keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = { onSave(text) }),
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Done),
+                )
+                if (renamed) androidx.compose.material3.TextButton(onClick = { onSave(null) }, modifier = Modifier.focusGlide(androidx.compose.foundation.shape.CircleShape)) {
+                    Text(stringResource(R.string.home_shelf_rename_reset))
+                }
+            }
+        },
+        confirmButton = {
+            androidx.compose.material3.TextButton(onClick = { onSave(text) }, enabled = text.isNotBlank(), modifier = Modifier.focusGlide(androidx.compose.foundation.shape.CircleShape)) {
+                Text(stringResource(R.string.home_shelf_rename_save))
+            }
+        },
+        dismissButton = {
+            androidx.compose.material3.TextButton(onClick = onDismiss, modifier = Modifier.focusGlide(androidx.compose.foundation.shape.CircleShape)) {
+                Text(stringResource(R.string.common_cancel))
+            }
+        },
+    )
 }
 
 @Composable
@@ -265,7 +317,7 @@ private fun ShelfArtChooser(e: LibraryEntry, onClose: () -> Unit) {
 }
 
 @Composable
-private fun ShelfOptionsDialog(installedOnly: Boolean, artTitle: String?, onArt: () -> Unit, onPick: (Boolean) -> Unit, onDismiss: () -> Unit) {
+private fun ShelfOptionsDialog(installedOnly: Boolean, artTitle: String?, onArt: () -> Unit, onRename: () -> Unit, onPick: (Boolean) -> Unit, onDismiss: () -> Unit) {
     androidx.compose.material3.AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.home_shelf_options)) },
@@ -276,6 +328,9 @@ private fun ShelfOptionsDialog(installedOnly: Boolean, artTitle: String?, onArt:
             ) {
                 if (artTitle != null) androidx.compose.material3.TextButton(onClick = onArt, modifier = Modifier.focusGlide(androidx.compose.foundation.shape.CircleShape)) {
                     Text(stringResource(R.string.home_shelf_art_for, artTitle))
+                }
+                if (artTitle != null) androidx.compose.material3.TextButton(onClick = onRename, modifier = Modifier.focusGlide(androidx.compose.foundation.shape.CircleShape)) {
+                    Text(stringResource(R.string.home_shelf_rename_for, artTitle))
                 }
                 for ((value, label) in listOf(false to R.string.home_shelf_favorites, true to R.string.home_shelf_installed)) {
                     androidx.compose.material3.TextButton(onClick = { onPick(value) }, modifier = Modifier.focusGlide(androidx.compose.foundation.shape.CircleShape)) {

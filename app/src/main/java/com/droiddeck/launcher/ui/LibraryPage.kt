@@ -381,17 +381,19 @@ internal fun LibraryPage(
             else -> a.onAndroidRom(game, target)
         }
     }
-    val all = remember(soundMode, s.steamGames, s.soundtracks, s.soundtracksEnabled, cloudRows, owned, installedStore, savedSnapshot, favoritesLabel, preview, androidApps, androidAdded, androidRemoved, androidEmulators, roms) {
+    remember { EntryNames.load(ctx) }
+    val entryNames = EntryNames.names
+    val all = remember(soundMode, s.steamGames, s.soundtracks, s.soundtracksEnabled, cloudRows, owned, installedStore, savedSnapshot, favoritesLabel, preview, androidApps, androidAdded, androidRemoved, androidEmulators, roms, entryNames) {
         if (soundMode) s.soundtracks.map { LibraryEntry("sound:${it.appId}", it.source, it.name, it, null, true) } +
             (if (s.soundtracks.isEmpty() && savedSnapshot.favorites.isEmpty() && savedSnapshot.collections.isEmpty()) emptyList() else SoundtrackCollections.games(ctx, favoritesLabel, skipEmptyFavorites = true))
                 .map { LibraryEntry("sound:${it.appId}", it.source, it.name, it, null, true) }
-        else libraryEntries(s.steamGames + cloudRows + if (s.soundtracksEnabled) emptyList() else s.soundtracks.filter { it.library != Library.ADDED }, owned, installedStore)
+        else renamedEntries(libraryEntries(s.steamGames + cloudRows + if (s.soundtracksEnabled) emptyList() else s.soundtracks.filter { it.library != Library.ADDED }, owned, installedStore)
             .let { rows -> if (preview == LibraryPreview.NOTHING_INSTALLED) rows.map { LibraryEntry(it.key, it.source, it.title, it.game, it.item, false) } else rows } +
-            androidEntries(androidApps, androidAdded, androidRemoved, androidEmulators) + romEntries(roms)
+            androidEntries(androidApps, androidAdded, androidRemoved, androidEmulators) + romEntries(roms), entryNames)
     }
     val romCoversSettled = AndroidRoms.coversSettled
     val artWanted = remember(all, romCoversSettled) { libraryArtWanted(all, romCoversSettled) }
-    LaunchedEffect(artWanted.map { it.key }) { LibraryArt.fetchAll(ctx, artWanted) }
+    LaunchedEffect(artWanted.map { it.key + "|" + it.title }) { LibraryArt.fetchAll(ctx, artWanted) }
     var addingSoundtrack by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { XboxLibraryFilter.load(ctx) }
     var showUninstalled by remember(LibraryView.ownedRequest) { mutableStateOf(SessionPrefs.libraryShowUninstalled(ctx)) }

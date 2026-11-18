@@ -86,6 +86,18 @@ object LibraryArt {
         File(dir, OFF).writeText("")
     }
 
+    fun renamed(context: Context, key: String) {
+        val dir = dir(context, key)
+        if (SLOTS.any { AddedGameArt.chosen(dir, it) != null }) return
+        for (s in SLOTS) {
+            File(dir, SteamGridDb.cacheName(s)).delete()
+            File(dir, SteamGridDb.cacheName(s) + ".src").delete()
+        }
+        File(dir, "sgdb-id").delete()
+        File(dir, TRIED).delete()
+        changed(key)
+    }
+
     private fun changed(key: String) {
         for (s in SLOTS) known.remove("$key|${s.key}")
         version++

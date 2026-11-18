@@ -85,6 +85,22 @@ class ShelfArtTest {
     }
 
     @Test
+    fun aRenameClearsTheAutomaticLookupButKeepsAPick() {
+        val dir = tempDir()
+        for (name in listOf("square", "sgdb-id", "sgdb-id-any", "auto-tried")) File(dir, name).writeText("1")
+        ShelfArt.renamedIn(dir)
+        assertTrue(ShelfArt.needsFetch(dir, now = 1_000L, keyChangedAt = 0L))
+        assertFalse(File(dir, "sgdb-id").exists())
+
+        val picked = tempDir()
+        File(picked, "chosen-icon-0000000000001.png").writeBytes(byteArrayOf(2))
+        File(picked, "square").writeBytes(byteArrayOf(1))
+        ShelfArt.renamedIn(picked)
+        assertTrue(File(picked, "square").exists())
+        assertEquals("chosen-icon-0000000000001.png", ShelfArt.shownIn(picked)?.name)
+    }
+
+    @Test
     fun theChooserListsLargePngIconsBestFirst() {
         val items = org.json.JSONArray()
             .put(icon("https://a/small.png", 64, 99))
