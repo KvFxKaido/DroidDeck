@@ -78,6 +78,17 @@ object ShelfArt {
         }
     }
 
+    fun renamed(context: Context, key: String) {
+        renamedIn(dir(context, key))
+        changed(key)
+    }
+
+    // A new name means a new lookup; a pick of the owner's own is never touched.
+    internal fun renamedIn(dir: File) {
+        if (AddedGameArt.chosen(dir, SLOT) != null) return
+        for (name in listOf(ID, ANY_ID, TRIED, SQUARE)) File(dir, name).delete()
+    }
+
     fun choices(context: Context, key: String, title: String, steamAppId: Int?): AddedGameArt.Choices {
         val apiKey = SteamGridDb.key(context)
         if (apiKey.isEmpty()) return AddedGameArt.Choices(emptyList(), SteamGridDb.Status.NO_KEY)
