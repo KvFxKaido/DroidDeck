@@ -50,6 +50,21 @@ class HomeShelfTest {
     }
 
     @Test
+    fun aFreshStartOpensTheShelfWhenItIsTheHomePage() {
+        val shelf = com.droiddeck.launcher.core.AppUiPrefs.HOME_PAGE_SHELF
+        assertEquals(true, ShelfState.showingOnCreate(null, false, shelf, navigating = false))
+        assertEquals(false, ShelfState.showingOnCreate(null, false, shelf, navigating = true))
+        assertEquals(false, ShelfState.showingOnCreate(null, false, com.droiddeck.launcher.core.AppUiPrefs.HOME_PAGE_STEAM, navigating = false))
+    }
+
+    @Test
+    fun aRestartKeepsWhatTheShelfWasShowing() {
+        val shelf = com.droiddeck.launcher.core.AppUiPrefs.HOME_PAGE_SHELF
+        assertEquals(false, ShelfState.showingOnCreate(false, false, shelf, navigating = false))
+        assertEquals(true, ShelfState.showingOnCreate(true, false, com.droiddeck.launcher.core.AppUiPrefs.HOME_PAGE_STEAM, navigating = false))
+    }
+
+    @Test
     fun returningFromTheShelfIsReadOnce() {
         ShelfState.showing = true
         ShelfState.leave("games")

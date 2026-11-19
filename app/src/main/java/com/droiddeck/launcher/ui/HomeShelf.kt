@@ -101,6 +101,28 @@ internal object ShelfState {
     }
 
     fun takeReturn(): String? = returnTo.also { returnTo = null }
+
+    // Android can end the process while a game runs; the shelf is kept in the activity's saved state
+    // so coming back lands where a warm return would.
+    fun save(out: android.os.Bundle) {
+        out.putBoolean(KEY_SHOWING, showing)
+        lastFocused?.let { out.putString(KEY_FOCUSED, it) }
+    }
+
+    fun restore(saved: android.os.Bundle?, homePage: String, navigating: Boolean) {
+        val was = saved?.takeIf { it.containsKey(KEY_SHOWING) }?.getBoolean(KEY_SHOWING)
+        showing = showingOnCreate(was, showing, homePage, navigating)
+        saved?.getString(KEY_FOCUSED)?.let { lastFocused = it }
+    }
+
+    fun showingOnCreate(saved: Boolean?, current: Boolean, homePage: String, navigating: Boolean): Boolean = when {
+        saved != null -> saved
+        !navigating && homePage == AppUiPrefs.HOME_PAGE_SHELF -> true
+        else -> current
+    }
+
+    private const val KEY_SHOWING = "home_shelf_showing"
+    private const val KEY_FOCUSED = "home_shelf_focused"
 }
 
 internal fun shelfSortKey(title: String): String =
