@@ -31,3 +31,21 @@ internal fun AndroidEntryDialog(app: HomeApp.LaunchableApp, favorite: Boolean, o
         confirmButton = { TextButton(onClick = onDismiss, modifier = Modifier.focusGlide(CircleShape)) { Text(stringResource(R.string.common_cancel)) } },
     )
 }
+
+// For games from DroidDeck's own emulators: they are found automatically, so there is nothing to remove.
+@Composable
+internal fun DeckRomDialog(title: String, favorite: Boolean, onFavorite: () -> Unit, onArt: () -> Unit, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.fillMaxWidth()) {
+                TextButton(onClick = onFavorite, modifier = Modifier.focusGlide(CircleShape)) {
+                    Text(stringResource(if (favorite) R.string.fm_favorite_remove else R.string.fm_favorite_add))
+                }
+                TextButton(onClick = onArt, modifier = Modifier.focusGlide(CircleShape)) { Text(stringResource(R.string.library_art_change)) }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss, modifier = Modifier.focusGlide(CircleShape)) { Text(stringResource(R.string.common_cancel)) } },
+    )
+}
