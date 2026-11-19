@@ -125,8 +125,11 @@ internal object ShelfPrefs {
     }
 }
 
-internal fun shelfEntries(all: List<LibraryEntry>, favorites: Set<String>, installedOnly: Boolean = false): List<LibraryEntry> =
-    all.filter { if (installedOnly) it.installed else it.favoriteKey in favorites }
+// Hidden games (the Library's Hidden tab, including games hidden in Steam) stay off the shelf in both modes.
+internal fun shelfEntries(
+    all: List<LibraryEntry>, favorites: Set<String>, installedOnly: Boolean = false, hidden: (LibraryEntry) -> Boolean = { false },
+): List<LibraryEntry> =
+    all.filter { (if (installedOnly) it.installed else it.favoriteKey in favorites) && !hidden(it) }
         .distinctBy { it.favoriteKey }.sortedWith(compareBy({ shelfSortKey(it.title) }, { it.key }))
 
 private const val SHELF_ROWS = 3
@@ -171,14 +174,17 @@ internal fun HomeShelf(s: FrontEndState, a: FrontEndActions) {
     val favorites = LibraryFavorites.keys
     val installedOnly = ShelfPrefs.installedOnly
     val entryNames = EntryNames.names
-    val entries = remember(s.steamGames, cloudRows, owned, installedStore, s.androidApps, HomeLibrary.added, HomeLibrary.removed, HomeLibrary.emulators, AndroidRoms.games, favorites, installedOnly, entryNames) {
+    rememberHiddenSync()
+    val hiddenKeys = LibraryHidden.keys
+    val hiddenSteam = LibraryHidden.steam
+    val entries = remember(s.steamGames, cloudRows, owned, installedStore, s.androidApps, HomeLibrary.added, HomeLibrary.removed, HomeLibrary.emulators, AndroidRoms.games, favorites, installedOnly, entryNames, hiddenKeys, hiddenSteam) {
         shelfEntries(
             renamedEntries(
                 libraryEntries(s.steamGames + cloudRows, owned, installedStore) +
                     androidEntries(s.androidApps, HomeLibrary.added, HomeLibrary.removed, HomeLibrary.emulators) + romEntries(AndroidRoms.games),
                 entryNames,
             ),
-            favorites, installedOnly,
+            favorites, installedOnly, LibraryHidden::isHidden,
         )
     }
     LaunchedEffect(entries.map { it.key + "|" + it.title }) {
