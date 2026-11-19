@@ -36,6 +36,14 @@ class HomeShelfTest {
     }
 
     @Test
+    fun hiddenGamesStayOffTheShelfInBothModes() {
+        val all = listOf(entry("a", "Alpha"), entry("b", "Beta"), entry("c", "Gamma"))
+        val hidden: (LibraryEntry) -> Boolean = { it.key == "b" }
+        assertEquals(listOf("a"), shelfEntries(all, setOf("a", "b"), hidden = hidden).map { it.key })
+        assertEquals(listOf("a", "c"), shelfEntries(all, emptySet(), installedOnly = true, hidden = hidden).map { it.key })
+    }
+
+    @Test
     fun aFavoriteListedTwiceAppearsOnce() {
         val all = listOf(entry("a", "Alpha"), entry("a", "Alpha"))
         assertEquals(1, shelfEntries(all, setOf("a")).size)
