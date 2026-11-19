@@ -31,4 +31,4 @@ internal object EntryNames {
 
 internal fun renamedEntries(entries: List<LibraryEntry>, names: Map<String, String>): List<LibraryEntry> =
     if (names.isEmpty()) entries
-    else entries.map { e -> names[e.key]?.let { LibraryEntry(e.key, e.source, it, e.game, e.item, e.installed, e.app, e.rom) } ?: e }
+    else entries.map { e -> names[e.key]?.let { LibraryEntry(e.key, e.source, it, e.game, e.item, e.installed, e.app, e.rom, e.deck) } ?: e }

@@ -177,11 +177,12 @@ internal fun HomeShelf(s: FrontEndState, a: FrontEndActions) {
     rememberHiddenSync()
     val hiddenKeys = LibraryHidden.keys
     val hiddenSteam = LibraryHidden.steam
-    val entries = remember(s.steamGames, cloudRows, owned, installedStore, s.androidApps, HomeLibrary.added, HomeLibrary.removed, HomeLibrary.emulators, AndroidRoms.games, favorites, installedOnly, entryNames, hiddenKeys, hiddenSteam) {
+    val androidReady = AndroidRoms.installed.filterValues { it.isNotEmpty() }.keys
+    val entries = remember(s.steamGames, cloudRows, owned, installedStore, s.androidApps, HomeLibrary.added, HomeLibrary.removed, HomeLibrary.emulators, AndroidRoms.games, androidReady, s.emulators, favorites, installedOnly, entryNames, hiddenKeys, hiddenSteam) {
         shelfEntries(
             renamedEntries(
                 libraryEntries(s.steamGames + cloudRows, owned, installedStore) +
-                    androidEntries(s.androidApps, HomeLibrary.added, HomeLibrary.removed, HomeLibrary.emulators) + romEntries(AndroidRoms.games),
+                    androidEntries(s.androidApps, HomeLibrary.added, HomeLibrary.removed, HomeLibrary.emulators) + emulationEntries(AndroidRoms.games, androidReady, s.emulators),
                 entryNames,
             ),
             favorites, installedOnly, LibraryHidden::isHidden,
@@ -196,10 +197,12 @@ internal fun HomeShelf(s: FrontEndState, a: FrontEndActions) {
         ShelfState.lastFocused = e.key
         val app = e.app
         val rom = e.rom
+        val deck = e.deck
         val game = e.game
         val item = e.item
         when {
             app != null -> a.onAndroidApp(app, null)
+            deck != null -> a.onRom(deck)
             rom != null -> {
                 val candidates = AndroidRoms.installed[rom.system.id].orEmpty()
                 val target = AndroidEmulators.choose(candidates, AndroidRoms.gameChosen[rom.file.path], AndroidRoms.chosen[rom.system.id])
@@ -332,7 +335,7 @@ internal fun HomeShelf(s: FrontEndState, a: FrontEndActions) {
                 ShelfMenuRow(stringResource(R.string.home_shelf_artwork)) { itemMenu = null; artFor = e },
                 ShelfMenuRow(stringResource(R.string.home_shelf_rename_item)) { itemMenu = null; renaming = e },
                 ShelfMenuRow(stringResource(if (favorite) R.string.fm_favorite_remove else R.string.fm_favorite_add)) { itemMenu = null; LibraryFavorites.toggle(ctx, e.favoriteKey) },
-                ShelfMenuRow(stringResource(R.string.home_shelf_open_library)) { itemMenu = null; ShelfState.leave(if (e.app != null || e.rom != null) "games" else e.key) },
+                ShelfMenuRow(stringResource(R.string.home_shelf_open_library)) { itemMenu = null; ShelfState.leave(if (e.app != null || e.rom != null || e.deck != null) "games" else e.key) },
             ),
         ) { itemMenu = null }
     }
@@ -459,7 +462,7 @@ private fun ShelfTile(e: LibraryEntry, size: Dp, focus: Modifier, onMenu: () -> 
     val ctx = LocalContext.current
     var focused by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(if (focused) 1.08f else 1f, label = "shelfTile")
-    val cover = remember(e.key, e.app, e.rom, e.game, e.item) { entryArt(ctx, e, tall = true) }
+    val cover = remember(e.key, e.app, e.rom, e.deck, e.game, e.item) { entryArt(ctx, e, tall = true) }
     val art = ShelfArt.square(ctx, e.key) ?: cover
     val shape = RoundedCornerShape(size * 0.12f)
     Box(
