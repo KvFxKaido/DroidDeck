@@ -48,4 +48,20 @@ class HomeDockTest {
         assertEquals(list, dockMove(list, "app:a/b", 1))
         assertEquals(list, dockMove(list, "page:games", -1))
     }
+
+    @Test
+    fun devHarnessIsAKnownPageButNotInTheDefaultDock() {
+        assertEquals(listOf("page:games", "page:agent"), dockParse("page:games\npage:agent"))
+        assertEquals(listOf("page:agent"), popoutParse("page:agent"))
+        assertEquals(false, "page:agent" in DockPrefs.DEFAULT)
+    }
+
+    @Test
+    fun movingStepsOverHiddenItems() {
+        val list = listOf("page:games", "page:agent", "app:a/b", "page:steam")
+        val shown: (String) -> Boolean = { it != "page:agent" }
+        assertEquals(listOf("app:a/b", "page:games", "page:agent", "page:steam"), dockMove(list, "app:a/b", -1, shown))
+        assertEquals(listOf("page:agent", "app:a/b", "page:steam", "page:games"), dockMove(listOf("page:agent", "app:a/b", "page:games", "page:steam"), "page:games", 1, shown))
+        assertEquals(listOf("page:agent", "page:games"), dockMove(listOf("page:agent", "page:games"), "page:games", -1, shown))
+    }
 }

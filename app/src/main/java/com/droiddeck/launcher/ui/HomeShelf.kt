@@ -261,7 +261,9 @@ internal fun HomeShelf(s: FrontEndState, a: FrontEndActions) {
         ),
     ) { options = false }
     dockMenu?.let { slot ->
-        val at = DockPrefs.items.indexOf(slot.id)
+        val shown: (String) -> Boolean = { dockResolvable(it, s.androidApps) }
+        val visible = DockPrefs.items.filter(shown)
+        val at = visible.indexOf(slot.id)
         ShelfMenu(
             slot.label,
             listOfNotNull(
@@ -270,8 +272,8 @@ internal fun HomeShelf(s: FrontEndState, a: FrontEndActions) {
                     .takeIf { slot.iconApp.key in HomeIcons.overrides },
                 ShelfMenuRow(stringResource(R.string.home_shelf_rename_item)) { dockMenu = null; dockRenaming = slot },
                 ShelfMenuRow(stringResource(R.string.home_dock_popout)) { dockMenu = null; popoutFor = slot },
-                ShelfMenuRow(stringResource(R.string.home_dock_move_left)) { DockPrefs.move(ctx, slot.id, -1); dockMenu = null }.takeIf { at > 0 },
-                ShelfMenuRow(stringResource(R.string.home_dock_move_right)) { DockPrefs.move(ctx, slot.id, 1); dockMenu = null }.takeIf { at in 0 until DockPrefs.items.lastIndex },
+                ShelfMenuRow(stringResource(R.string.home_dock_move_left)) { DockPrefs.move(ctx, slot.id, -1, shown); dockMenu = null }.takeIf { at > 0 },
+                ShelfMenuRow(stringResource(R.string.home_dock_move_right)) { DockPrefs.move(ctx, slot.id, 1, shown); dockMenu = null }.takeIf { at in 0 until visible.lastIndex },
                 ShelfMenuRow(stringResource(R.string.home_dock_remove)) { DockPrefs.remove(ctx, slot.id); dockMenu = null }.takeIf { slot.id != DockPrefs.LIBRARY },
             ),
         ) { dockMenu = null }
@@ -296,7 +298,7 @@ internal fun HomeShelf(s: FrontEndState, a: FrontEndActions) {
     }
     if (addingToDock) {
         val inDock = DockPrefs.items.toSet()
-        val pages = DockPrefs.PAGES.filter { "page:$it" !in inDock }.map { page ->
+        val pages = DockPrefs.PAGES.filter { "page:$it" !in inDock && dockPageGlyph(it) != null }.map { page ->
             ShelfMenuRow(stringResource(dockPageLabel(page))) { DockPrefs.add(ctx, "page:$page"); addingToDock = false }
         }
         val apps = s.androidApps.filter { appDockId(it.packageName, it.className) !in inDock }.sortedBy { it.label.lowercase() }.map { app ->
@@ -307,7 +309,7 @@ internal fun HomeShelf(s: FrontEndState, a: FrontEndActions) {
     iconFor?.let { app -> AppIconPicker(app, 24.dp) { iconFor = null } }
     popoutFor?.let { slot ->
         val chosen = DockPrefs.popouts[slot.id].orEmpty()
-        val pages = DockPrefs.PAGES.map { "page:$it" }.filter { it != slot.id }.map { id ->
+        val pages = DockPrefs.PAGES.filter { dockPageGlyph(it) != null }.map { "page:$it" }.filter { it != slot.id }.map { id ->
             ShelfMenuRow(stringResource(dockPageLabel(dockPage(id).orEmpty())), checked = id in chosen) { DockPrefs.togglePopout(ctx, slot.id, id) }
         }
         val apps = s.androidApps.filter { appDockId(it.packageName, it.className) != slot.id }.sortedBy { it.label.lowercase() }.map { app ->
@@ -480,14 +482,17 @@ private fun ShelfTile(e: LibraryEntry, size: Dp, focus: Modifier, onMenu: () -> 
     }
 }
 
-private enum class DockGlyph { LIBRARY, STORES, APPS, SETTINGS, STEAM, MENU }
+private enum class DockGlyph { LIBRARY, STORES, APPS, SETTINGS, STEAM, TERMINAL, MENU }
 
+// A page with no glyph is not shown or offered: Dev Harness follows its rail tab, so switching the tab off
+// hides it from the dock and pop-outs without forgetting where it was.
 private fun dockPageGlyph(page: String): DockGlyph? = when (page) {
     "games" -> DockGlyph.LIBRARY
     "stores" -> DockGlyph.STORES
     AppUiPrefs.HOME_PAGE_APPS -> DockGlyph.APPS
     "setup" -> DockGlyph.SETTINGS
     "steam" -> DockGlyph.STEAM
+    DockPrefs.AGENT -> DockGlyph.TERMINAL.takeIf { com.droiddeck.launcher.agent.AgentTab.shown }
     else -> null
 }
 
@@ -496,6 +501,7 @@ private fun dockPageLabel(page: String): Int = when (page) {
     "stores" -> R.string.rail_stores
     AppUiPrefs.HOME_PAGE_APPS -> R.string.rail_apps
     "setup" -> R.string.rail_setup
+    DockPrefs.AGENT -> R.string.rail_agent
     else -> R.string.rail_steam
 }
 
@@ -567,7 +573,7 @@ private fun ShelfDock(
                             step = step,
                             onMenu = { onMenu(slot) },
                             onPopout = if (!hasPopout) null else ({ open = if (open == id) null else id }),
-                            onDragStep = { delta -> DockPrefs.move(ctx, id, delta) },
+                            onDragStep = { delta -> DockPrefs.move(ctx, id, delta) { dockResolvable(it, s.androidApps) } },
                             anchored = {
                                 if (open == id && hasPopout) DockPopout(slot, inside, s,
                                     onHeader = { open = null; activate(slot) },
@@ -763,6 +769,11 @@ private fun DrawScope.drawGlyph(glyph: DockGlyph, color: Color) {
             drawRoundRect(color, p(7f, 9f), Size(34f * u, 8f * u), CornerRadius(4f * u), style = stroke)
             drawRoundRect(color, p(7f, 20f), Size(34f * u, 8f * u), CornerRadius(4f * u), style = stroke)
             drawRoundRect(color, p(7f, 31f), Size(34f * u, 8f * u), CornerRadius(4f * u), style = stroke)
+        }
+        DockGlyph.TERMINAL -> {
+            drawRoundRect(color, p(6f, 9f), Size(36f * u, 30f * u), CornerRadius(6f * u), style = stroke)
+            line(13f, 18f, 19f, 24f); line(19f, 24f, 13f, 30f)
+            line(23f, 31f, 33f, 31f)
         }
         DockGlyph.STEAM -> {
             line(10f, 34f, 22f, 26f)
