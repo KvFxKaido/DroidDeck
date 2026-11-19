@@ -1255,6 +1255,7 @@ class FrontEndActivity : ComponentActivity(), com.droiddeck.launcher.ui.AgentPet
         readGameIntent(intent)
         // A Lab build is usually the agent's work, so the app comes back where the agent is.
         if (savedInstanceState == null && navRequest == null && com.droiddeck.launcher.lab.LabOverlay.promoted && com.droiddeck.launcher.agent.AgentTab.visible) navRequest = "agent"
+        com.droiddeck.launcher.ui.ShelfState.restore(savedInstanceState, com.droiddeck.launcher.core.AppUiPrefs.homePage(this), navRequest != null || intent.data != null || shortcutPicker)
         gameSyncFolder = GameFileSync.folder(this)
         displayManager = getSystemService(DISPLAY_SERVICE) as DisplayManager
         refreshPhantomStatus()
@@ -2177,6 +2178,7 @@ class FrontEndActivity : ComponentActivity(), com.droiddeck.launcher.ui.AgentPet
         super.onSaveInstanceState(outState)
         outState.putBoolean(STATE_HOME_CHOICE_OPEN, homeChoiceOpen)
         outState.putBoolean(STATE_GAME_SPACE_OFFERED, gameSpaceOffered)
+        com.droiddeck.launcher.ui.ShelfState.save(outState)
         pendingSessionLogExport?.let { outState.putString(KEY_PENDING_SESSION_LOG_EXPORT, it.absolutePath) }
         if (slowUsbNever) SessionPrefs.setSlowUsbWarningOff(this)
         saveCompatLaunch(outState)

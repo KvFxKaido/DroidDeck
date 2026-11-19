@@ -488,7 +488,10 @@ private fun FrontEndScreenBody(s: FrontEndState, a: FrontEndActions, page: (@Com
             "stores:downloads" -> selected = "downloads"
             "components" -> a.onComponents(true)
             "setup:launcher" -> { SetupTabs.openLauncher = true; selected = "setup" }
-            com.droiddeck.launcher.core.AppUiPrefs.HOME_PAGE_SHELF -> ShelfState.showing = true
+            com.droiddeck.launcher.core.AppUiPrefs.HOME_PAGE_SHELF -> {
+                if (s.pageKey != null) a.onPageBack()
+                ShelfState.showing = true
+            }
             com.droiddeck.launcher.sync.SyncthingService.NAV -> com.droiddeck.launcher.sync.Syncthing.requestOpen()
             "setup:integration" -> { SetupTabs.openOverview = true; selected = "setup" }
             in SETTINGS_NAV -> { SetupTabs.openSection = SettingsSection.of(target.removePrefix("settings:")) ?: SettingsSection.OVERVIEW; selected = "setup" }
