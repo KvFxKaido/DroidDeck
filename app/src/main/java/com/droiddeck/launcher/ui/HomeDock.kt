@@ -10,8 +10,10 @@ internal object DockPrefs {
     private const val FILE = "home_dock"
     private const val KEY = "items"
     const val LIBRARY = "page:games"
-    val PAGES = listOf("games", "stores", AppUiPrefs.HOME_PAGE_APPS, "setup", "steam")
-    val DEFAULT = PAGES.map { "page:$it" }
+    // Dev Harness ("agent") is offered only while its rail tab is switched on; the shelf checks that when it draws.
+    const val AGENT = "agent"
+    val PAGES = listOf("games", "stores", AppUiPrefs.HOME_PAGE_APPS, "setup", "steam", AGENT)
+    val DEFAULT = (PAGES - AGENT).map { "page:$it" }
 
     private const val POPOUT = "popout:"
     private const val NAME = "name:"
@@ -66,7 +68,7 @@ internal object DockPrefs {
         edit.apply()
     }
 
-    fun move(context: Context, id: String, delta: Int) = save(context, dockMove(items, id, delta))
+    fun move(context: Context, id: String, delta: Int, shown: (String) -> Boolean = { true }) = save(context, dockMove(items, id, delta, shown))
 
     private fun save(context: Context, next: List<String>) {
         items = next
@@ -100,9 +102,14 @@ internal fun popoutToggle(list: List<String>, appId: String): List<String> = if 
 
 internal fun dockRemove(list: List<String>, id: String): List<String> = if (id == DockPrefs.LIBRARY) list else list - id
 
-internal fun dockMove(list: List<String>, id: String, delta: Int): List<String> {
+// Moves one shown step at a time: hidden items (Dev Harness with its tab off, an uninstalled app) are stepped
+// over, so a move never looks like it did nothing. They keep their place relative to each other.
+internal fun dockMove(list: List<String>, id: String, delta: Int, shown: (String) -> Boolean = { true }): List<String> {
     val i = list.indexOf(id)
-    val j = i + delta
-    if (i < 0 || j !in list.indices) return list
+    if (i < 0 || delta == 0) return list
+    val dir = if (delta > 0) 1 else -1
+    var j = i + dir
+    while (j in list.indices && !shown(list[j])) j += dir
+    if (j !in list.indices) return list
     return list.toMutableList().apply { add(j, removeAt(i)) }
 }
