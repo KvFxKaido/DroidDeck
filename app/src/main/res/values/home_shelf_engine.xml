@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="home_shelf_engine_proton">Proton</string>
+    <string name="home_shelf_engine_android">Android</string>
+    <string name="home_shelf_engine_cloud">Xbox Cloud</string>
+    <string name="home_shelf_engine_pc">PC</string>
+</resources>
