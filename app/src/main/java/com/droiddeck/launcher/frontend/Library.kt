@@ -333,7 +333,11 @@ object Library {
     internal fun displayTitle(name: String): String =
         name.replace(Regex("\\s*[(\\[][^)\\]]*[)\\]]"), "").trim().ifEmpty { name }
 
-    private val systemFolders: Set<String> by lazy { specs.flatMap { it.folders }.toSet() }
+    // Folders that belong to one console, so the loose-folder pass leaves their ISOs alone. Xbox 360 has no emulator
+    // here, but its discs are .iso too and RPCS3 would otherwise list them as PS3 games.
+    internal val systemFolders: Set<String> by lazy {
+        specs.flatMap { it.folders }.toSet() + AndroidEmulators.systems.flatMap { it.folders } + setOf("xbox 360", "xbox360", "x360")
+    }
     private val installedIds = mapOf(
         "rpcs3" to "rpcs3", "armsx2" to "armsx2", "dolphin" to "dolphin", "duckstation" to "duckstation",
         "melonds" to "melonds", "cemu" to "cemu", "ppsspp" to "emulators", "retroarch" to "emulators",
