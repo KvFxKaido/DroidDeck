@@ -178,6 +178,7 @@ internal fun HomeShelf(s: FrontEndState, a: FrontEndActions) {
     var renaming by remember { mutableStateOf<LibraryEntry?>(null) }
     var options by remember { mutableStateOf(false) }
     var itemMenu by remember { mutableStateOf<LibraryEntry?>(null) }
+    var modeFor by remember { mutableStateOf<ModeTarget?>(null) }
     var artFor by remember { mutableStateOf<LibraryEntry?>(null) }
     remember { DockPrefs.load(ctx) }
     var dockMenu by remember { mutableStateOf<DockSlot?>(null) }
@@ -351,16 +352,19 @@ internal fun HomeShelf(s: FrontEndState, a: FrontEndActions) {
     }
     itemMenu?.let { e ->
         val favorite = e.favoriteKey in LibraryFavorites.keys
+        val mode = if (com.droiddeck.launcher.core.RedmagicPerformance.supported(ctx)) modeTarget(e, AndroidRoms.installed, AndroidRoms.gameChosen, AndroidRoms.chosen) else null
         ShelfMenu(
             e.title,
-            listOf(
+            listOfNotNull(
                 ShelfMenuRow(stringResource(R.string.home_shelf_artwork)) { itemMenu = null; artFor = e },
                 ShelfMenuRow(stringResource(R.string.home_shelf_rename_item)) { itemMenu = null; renaming = e },
                 ShelfMenuRow(stringResource(if (favorite) R.string.fm_favorite_remove else R.string.fm_favorite_add)) { itemMenu = null; LibraryFavorites.toggle(ctx, e.favoriteKey) },
+                mode?.let { t -> ShelfMenuRow(stringResource(R.string.redmagic_perf_title)) { itemMenu = null; modeFor = t } },
                 ShelfMenuRow(stringResource(R.string.home_shelf_open_library)) { itemMenu = null; ShelfState.leave(if (e.app != null || e.rom != null || e.deck != null) "games" else e.key) },
             ),
         ) { itemMenu = null }
     }
+    modeFor?.let { t -> RedmagicModeDialog(t, s.adbPaired) { modeFor = null } }
     artFor?.let { e -> ShelfArtChooser(e) { artFor = null } }
     renaming?.let { e ->
         ShelfRenameDialog(e.title, renamed = e.key in entryNames, onSave = { name ->

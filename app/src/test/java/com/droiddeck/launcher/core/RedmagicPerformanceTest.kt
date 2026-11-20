@@ -58,4 +58,19 @@ class RedmagicPerformanceTest {
         assertEquals(RedmagicPerformance.BALANCE, RedmagicPerformance.pick(null, RedmagicPerformance.BALANCE))
         assertEquals(RedmagicPerformance.LEAVE, RedmagicPerformance.pick(RedmagicPerformance.LEAVE, RedmagicPerformance.RISE))
     }
+    @Test fun anotherAppsModeIsReadAsREDMAGICHoldsIt() {
+        assertEquals(RedmagicPerformance.AppMode.Held("300", diablo = false), RedmagicPerformance.appMode(read(), "org.b.game"))
+        assertEquals(RedmagicPerformance.AppMode.Held("200", diablo = true), RedmagicPerformance.appMode(read(diablo = "com.a.game"), "com.a.game"))
+        assertEquals(RedmagicPerformance.AppMode.NotListed, RedmagicPerformance.appMode(read(), "com.not.listed"))
+        assertEquals(RedmagicPerformance.AppMode.NotListed, RedmagicPerformance.appMode(read(), "com.droiddeck"))
+    }
+
+    @Test fun writingAnotherAppsModeLeavesEveryOtherEntryAlone() {
+        assertEquals(
+            "com.a.game+100,com.droiddeck.launcher+200,com.droiddeck.launcher.shortcuts+340,org.b.game+300,",
+            RedmagicPerformance.change(read(), "com.a.game", RedmagicPerformance.ECO.toString()),
+        )
+        assertNull(RedmagicPerformance.change(read(diablo = "com.a.game"), "com.a.game", "100"))
+        assertNull(RedmagicPerformance.change(read(), "com.not.listed", "100"))
+    }
 }

@@ -15,7 +15,7 @@ import com.droiddeck.launcher.HomeApp
 import com.droiddeck.launcher.R
 
 @Composable
-internal fun AndroidEntryDialog(app: HomeApp.LaunchableApp, favorite: Boolean, onFavorite: () -> Unit, onRemove: () -> Unit, onArt: () -> Unit, onDismiss: () -> Unit) {
+internal fun AndroidEntryDialog(app: HomeApp.LaunchableApp, favorite: Boolean, onFavorite: () -> Unit, onRemove: () -> Unit, onArt: () -> Unit, onPerformance: (() -> Unit)? = null, onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(app.label) },
@@ -25,6 +25,7 @@ internal fun AndroidEntryDialog(app: HomeApp.LaunchableApp, favorite: Boolean, o
                     Text(stringResource(if (favorite) R.string.fm_favorite_remove else R.string.fm_favorite_add))
                 }
                 TextButton(onClick = onArt, modifier = Modifier.focusGlide(CircleShape)) { Text(stringResource(R.string.library_art_change)) }
+                if (onPerformance != null) TextButton(onClick = onPerformance, modifier = Modifier.focusGlide(CircleShape)) { Text(stringResource(R.string.redmagic_perf_title)) }
                 TextButton(onClick = onRemove, modifier = Modifier.focusGlide(CircleShape)) { Text(stringResource(R.string.library_android_remove)) }
             }
         },
@@ -34,7 +35,7 @@ internal fun AndroidEntryDialog(app: HomeApp.LaunchableApp, favorite: Boolean, o
 
 // For games from DroidDeck's own emulators: they are found automatically, so there is nothing to remove.
 @Composable
-internal fun DeckRomDialog(title: String, favorite: Boolean, onFavorite: () -> Unit, onArt: () -> Unit, onDismiss: () -> Unit) {
+internal fun DeckRomDialog(title: String, favorite: Boolean, onFavorite: () -> Unit, onArt: () -> Unit, onPerformance: (() -> Unit)? = null, onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
@@ -44,6 +45,7 @@ internal fun DeckRomDialog(title: String, favorite: Boolean, onFavorite: () -> U
                     Text(stringResource(if (favorite) R.string.fm_favorite_remove else R.string.fm_favorite_add))
                 }
                 TextButton(onClick = onArt, modifier = Modifier.focusGlide(CircleShape)) { Text(stringResource(R.string.library_art_change)) }
+                if (onPerformance != null) TextButton(onClick = onPerformance, modifier = Modifier.focusGlide(CircleShape)) { Text(stringResource(R.string.redmagic_perf_title)) }
             }
         },
         confirmButton = { TextButton(onClick = onDismiss, modifier = Modifier.focusGlide(CircleShape)) { Text(stringResource(R.string.common_cancel)) } },

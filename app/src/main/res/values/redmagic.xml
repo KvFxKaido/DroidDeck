@@ -9,4 +9,12 @@
     <string name="redmagic_perf_selected">%1$s (selected)</string>
     <string name="redmagic_perf_hint">Set while this game runs and put back when the session ends. Diablo stays in the REDMAGIC overlay.</string>
     <string name="redmagic_perf_unpaired">Needs wireless debugging to be paired. Until then the mode is left to REDMAGIC.</string>
+    <string name="redmagic_app_hint">This is REDMAGIC\'s own mode for %1$s. It applies whenever %1$s is in front, however it was opened, and stays after DroidDeck closes.</string>
+    <string name="redmagic_app_rom_hint">%2$s opens in %1$s, so this is %1$s\'s mode in REDMAGIC. It applies to every game %1$s opens.</string>
+    <string name="redmagic_app_reading">Reading REDMAGIC\'s mode…</string>
+    <string name="redmagic_app_held">REDMAGIC has: %1$s</string>
+    <string name="redmagic_app_other">REDMAGIC\'s own value (%1$s)</string>
+    <string name="redmagic_app_not_listed">REDMAGIC has no mode listed for %1$s, so there is nothing for DroidDeck to change.</string>
+    <string name="redmagic_app_diablo">Diablo is on for this app, so the mode is set in the REDMAGIC overlay.</string>
+    <string name="redmagic_app_failed">Couldn\'t read or set REDMAGIC\'s mode: %1$s</string>
 </resources>
