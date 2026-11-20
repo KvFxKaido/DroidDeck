@@ -186,6 +186,8 @@ internal const val DECK_ROM_ENTRY = "deckrom:"
 // The Emulation source: ROMs for Android emulators plus every game DroidDeck's installed emulators find.
 // Both scan the same ROMs folder, so a file found by both is listed once: as the Android entry when an Android
 // emulator for its system is installed, as the DroidDeck one otherwise (the Android entry could not open it).
+internal fun deckRomKey(emulatorId: String, rom: Library.Rom): String = DECK_ROM_ENTRY + emulatorId + ":" + rom.hostPath.path
+
 internal fun emulationEntries(
     androidGames: List<AndroidEmulators.Game>, androidReady: Set<String>, deck: List<Library.Emulator>,
 ): List<LibraryEntry> {
@@ -194,7 +196,7 @@ internal fun emulationEntries(
     val android = androidGames.filter { it.system.id in androidReady || it.file.path !in deckFiles }
     val androidFiles = android.map { it.file.path }.toSet()
     return romEntries(android) + deckGames.filter { (_, g) -> g.hostPath.path !in androidFiles }
-        .map { (emu, g) -> LibraryEntry(DECK_ROM_ENTRY + emu.id + ":" + g.hostPath.path, Library.SOURCE_EMULATION, g.name, null, null, installed = true, deck = g) }
+        .map { (emu, g) -> LibraryEntry(deckRomKey(emu.id, g), Library.SOURCE_EMULATION, g.name, null, null, installed = true, deck = g) }
         .distinctBy { it.key }
 }
 
@@ -389,6 +391,7 @@ internal fun LibraryPage(
     var choosingRom by remember { mutableStateOf<AndroidEmulators.Game?>(null) }
     var romMenu by remember { mutableStateOf<AndroidEmulators.Game?>(null) }
     var appMenu by remember { mutableStateOf<LibraryEntry?>(null) }
+    var modeFor by remember { mutableStateOf<ModeTarget?>(null) }
     var artFor by remember { mutableStateOf<LibraryArtRequest?>(null) }
     var romDefault by remember { mutableStateOf<AndroidEmulators.Game?>(null) }
     val openRom: (AndroidEmulators.Game) -> Unit = { game ->
@@ -677,11 +680,17 @@ internal fun LibraryPage(
             onFavorite = { appMenu = null; LibraryFavorites.toggle(ctx, entry.favoriteKey) },
             onRemove = { appMenu = null; HomeLibrary.set(ctx, app, false) },
             onArt = { appMenu = null; artFor = LibraryArtRequest(entry.key, entry.title) },
+            onPerformance = if (com.droiddeck.launcher.core.RedmagicPerformance.supported(ctx)) {
+                modeTarget(entry, AndroidRoms.installed, AndroidRoms.gameChosen, AndroidRoms.chosen)?.let { t -> { appMenu = null; modeFor = t } }
+            } else null,
         ) { appMenu = null }
         else if (entry.deck != null) DeckRomDialog(
             entry.title, favorite = entry.favoriteKey in LibraryFavorites.keys,
             onFavorite = { appMenu = null; LibraryFavorites.toggle(ctx, entry.favoriteKey) },
             onArt = { appMenu = null; artFor = LibraryArtRequest(entry.key, entry.title) },
+            onPerformance = if (com.droiddeck.launcher.core.RedmagicPerformance.supported(ctx)) {
+                modeTarget(entry, AndroidRoms.installed, AndroidRoms.gameChosen, AndroidRoms.chosen)?.let { t -> { appMenu = null; modeFor = t } }
+            } else null,
         ) { appMenu = null }
     }
     romMenu?.let { game ->
@@ -691,8 +700,13 @@ internal fun LibraryPage(
             onClear = { romMenu = null; AndroidRoms.chooseForGame(ctx, game, null) },
             onSystemDefault = { romMenu = null; romDefault = game },
             onArt = { romMenu = null; artFor = LibraryArtRequest(game.key, game.title) },
+            onPerformance = if (com.droiddeck.launcher.core.RedmagicPerformance.supported(ctx)) {
+                val entry = romEntries(listOf(game)).first()
+                modeTarget(entry, AndroidRoms.installed, AndroidRoms.gameChosen, AndroidRoms.chosen)?.let { t -> { romMenu = null; modeFor = t } }
+            } else null,
         ) { romMenu = null }
     }
+    modeFor?.let { t -> RedmagicModeDialog(t, s.adbPaired) { modeFor = null } }
     romDefault?.let { game ->
         RomEmulatorDialog(game.system.name, AndroidRoms.installed[game.system.id].orEmpty(), onPick = { target ->
             romDefault = null

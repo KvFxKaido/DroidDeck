@@ -3059,7 +3059,7 @@ class SessionActivity : ComponentActivity(), SurfaceHolder.Callback, com.droidde
                 SessionState.gameId?.takeIf { it.toLongOrNull() != null }
                     ?: intent.getStringExtra(SessionService.EXTRA_GAME_ID)
             )?.toLongOrNull()
-            com.droiddeck.launcher.core.RedmagicPerformance.onActiveGame(this, activeAppId?.toString())
+            com.droiddeck.launcher.core.RedmagicPerformance.onActiveGame(this, activeAppId?.toString() ?: intent.getStringExtra(com.droiddeck.launcher.core.RedmagicPerformance.EXTRA_GAME))
             return FrameGen.mode(this, activeAppId?.toString())
         }
 

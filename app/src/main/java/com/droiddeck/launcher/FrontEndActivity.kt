@@ -1490,7 +1490,8 @@ class FrontEndActivity : ComponentActivity(), com.droiddeck.launcher.ui.AgentPet
                             startActivity(Intent(this, SessionActivity::class.java)
                                 .putExtra(SessionService.EXTRA_MODE, SessionService.MODE_RUN)
                                 .putExtra(SessionService.EXTRA_PROGRAM, e.program)
-                                .putExtra(SessionService.EXTRA_PROGRAM_ARGS, Library.launchArgs(e.id, g.guestPath).toTypedArray()))
+                                .putExtra(SessionService.EXTRA_PROGRAM_ARGS, Library.launchArgs(e.id, g.guestPath).toTypedArray())
+                                .putExtra(com.droiddeck.launcher.core.RedmagicPerformance.EXTRA_GAME, com.droiddeck.launcher.ui.deckRomKey(e.id, g)))
                         },
                         onResume = { startActivity(Intent(this, SessionActivity::class.java)) },
                         onSteamSettings = { loadModeSettings(SessionService.MODE_STEAM) },

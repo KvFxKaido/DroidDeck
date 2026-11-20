@@ -84,6 +84,40 @@ object RedmagicPerformance {
         return withEntry(read.list, pkg, value)
     }
 
+    /** A launch extra naming the game a DroidDeck session runs when it has no Steam app id, for its mode. */
+    const val EXTRA_GAME = "com.droiddeck.launcher.redmagic.GAME"
+
+    /** What REDMAGIC holds for another app. Its own per-app mode applies while that app is in front, so nothing is put back. */
+    sealed interface AppMode {
+        data class Held(val value: String, val diablo: Boolean) : AppMode
+        object NotListed : AppMode
+        data class Failed(val why: String) : AppMode
+    }
+
+    internal fun appMode(read: Read, pkg: String): AppMode =
+        entry(read.list, pkg)?.let { AppMode.Held(it, inDiablo(read.diablo, pkg)) } ?: AppMode.NotListed
+
+    fun readAppMode(context: Context, pkg: String, done: (AppMode) -> Unit) {
+        val app = context.applicationContext
+        worker.execute { done(readApp(app, pkg)) }
+    }
+
+    fun writeAppMode(context: Context, pkg: String, mode: Int, done: (AppMode) -> Unit) {
+        require(mode in CHOICES && mode != LEAVE)
+        val app = context.applicationContext
+        worker.execute {
+            val now = runCatching {
+                val read = parse(WirelessAdbFix.shell(app, readCommand())) ?: error("the mode list could not be read")
+                change(read, pkg, mode.toString())?.let { WirelessAdbFix.shell(app, writeCommand(it)) }
+            }.exceptionOrNull()
+            done(now?.let { AppMode.Failed(it.message ?: it.javaClass.simpleName) } ?: readApp(app, pkg))
+        }
+    }
+
+    private fun readApp(app: Context, pkg: String): AppMode = runCatching {
+        appMode(parse(WirelessAdbFix.shell(app, readCommand())) ?: error("the mode list could not be read"), pkg)
+    }.getOrElse { AppMode.Failed(it.message ?: it.javaClass.simpleName) }
+
     fun onActiveGame(context: Context, game: String?) {
         val app = context.applicationContext
         if (!supported(app)) return
