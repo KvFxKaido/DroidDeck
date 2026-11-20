@@ -244,6 +244,9 @@ internal fun HomeShelf(s: FrontEndState, a: FrontEndActions) {
             else -> ShelfState.leave(e.key)
         }
     }
+    var focusedKey by remember { mutableStateOf<String?>(null) }
+    val deckNames = remember(s.emulators) { s.emulators.associate { it.id to it.name } }
+    val engineOf: (LibraryEntry) -> ShelfEngine? = { e -> shelfEngine(e, AndroidRoms.installed, AndroidRoms.gameChosen, AndroidRoms.chosen, deckNames) }
     val grid = rememberLazyGridState()
     val tileFocus = remember { FocusRequester() }
     val dockFocus = remember { FocusRequester() }
@@ -279,8 +282,19 @@ internal fun HomeShelf(s: FrontEndState, a: FrontEndActions) {
             horizontalArrangement = Arrangement.spacedBy(gap), verticalArrangement = Arrangement.spacedBy(gap),
         ) {
             itemsIndexed(entries, key = { _, e -> e.key }) { i, e ->
-                ShelfTile(e, tile, if (i == start) Modifier.focusRequester(tileFocus) else Modifier, onMenu = { itemMenu = e }) { open(e) }
+                ShelfTile(
+                    e, tile, if (i == start) Modifier.focusRequester(tileFocus) else Modifier, engineOf(e),
+                    onFocus = { on -> if (on) focusedKey = e.key else if (focusedKey == e.key) focusedKey = null },
+                    onMenu = { itemMenu = e },
+                ) { open(e) }
             }
+        }
+        entries.firstOrNull { it.key == focusedKey }?.let { e ->
+            ShelfFocusLine(
+                e.title, engineOf(e),
+                Modifier.align(Alignment.BottomStart).fillMaxWidth()
+                    .padding(start = max(gap, 40.dp), end = 40.dp, bottom = dockHeight + max(0.dp, (gap - 22.dp) / 2)),
+            )
         }
         ShelfDock(s, a, dockFocus, { options = true }, { dockMenu = it }, { parent, row -> rowMenu = parent to row }, Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(dockHeight))
     }
@@ -484,7 +498,7 @@ private fun ShelfMenu(title: String, rows: List<ShelfMenuRow>, confirm: String? 
 
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
-private fun ShelfTile(e: LibraryEntry, size: Dp, focus: Modifier, onMenu: () -> Unit, onOpen: () -> Unit) {
+private fun ShelfTile(e: LibraryEntry, size: Dp, focus: Modifier, engine: ShelfEngine?, onFocus: (Boolean) -> Unit, onMenu: () -> Unit, onOpen: () -> Unit) {
     val ctx = LocalContext.current
     var focused by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(if (focused) 1.08f else 1f, label = "shelfTile")
@@ -497,7 +511,7 @@ private fun ShelfTile(e: LibraryEntry, size: Dp, focus: Modifier, onMenu: () -> 
             .clip(shape).background(Color(0xFF161616))
             .semantics { contentDescription = e.title }
             .then(focus)
-            .onFocusChanged { focused = it.isFocused }
+            .onFocusChanged { focused = it.isFocused; onFocus(it.isFocused) }
             .combinedClickable(role = Role.Button, onClick = onOpen, onLongClick = onMenu)
             .menuKey(onMenu)
             .controllerConfirm(onClick = onOpen),
@@ -514,6 +528,7 @@ private fun ShelfTile(e: LibraryEntry, size: Dp, focus: Modifier, onMenu: () -> 
                 alignment = androidx.compose.ui.BiasAlignment(0f, -0.1f), modifier = Modifier.fillMaxSize(),
             )
         }
+        if (focused && engine != null) ShelfEngineChip(engine, size, Modifier.align(Alignment.BottomStart).padding(size * 0.05f))
     }
 }
 
