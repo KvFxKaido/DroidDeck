@@ -189,4 +189,18 @@ class XboxManifestTest {
         for (url in listOf("http://login.live.com/", "https://login.live.com.evil.test/", "https://evil.test@login.live.com/", "https://login.live.com:8443/"))
             assertFalse(XboxLoginActivity.trusted(url))
     }
+    @Test fun aConfigBesideAnAppxManifestDescribesTheGame() {
+        val root = temporary.newFolder()
+        java.io.File(root, "MicrosoftGame.config").writeText("<Game><Identity Name=\"Sad.Cat\" Publisher=\"CN=Cat\" Version=\"1.0.0.0\"/><StoreId>9NV3L234VGXD</StoreId><ExecutableList><Executable Name=\"Replaced.exe\"/></ExecutableList></Game>")
+        java.io.File(root, "appxmanifest.xml").writeText("<Package><Identity Name=\"Other\" Publisher=\"CN=Other\" Version=\"2.0.0.0\"/><Applications><Application Executable=\"GameLaunchHelper.exe\" EntryPoint=\"Game.App\"/></Applications></Package>")
+        val info = XboxManifest.read(root)
+        assertEquals("9NV3L234VGXD", info.storeId)
+        assertEquals("Sad.Cat", info.name)
+        assertEquals(listOf("Replaced.exe"), info.executables)
+        assertEquals("", info.entryPoint)
+        java.io.File(root, "MicrosoftGame.config").delete()
+        assertEquals("Other", XboxManifest.read(root).name)
+        java.io.File(root, "appxmanifest.xml").delete()
+        assertThrows(IllegalArgumentException::class.java) { XboxManifest.read(root) }
+    }
 }
