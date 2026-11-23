@@ -118,14 +118,34 @@ object RedmagicPerformance {
         appMode(parse(WirelessAdbFix.shell(app, readCommand())) ?: error("the mode list could not be read"), pkg)
     }.getOrElse { AppMode.Failed(it.message ?: it.javaClass.simpleName) }
 
+    /** The game the running session last named, so a mode picked in the in-game menu is saved for it. */
+    @Volatile var activeGame: String? = null
+        private set
+
     fun onActiveGame(context: Context, game: String?) {
         val app = context.applicationContext
+        activeGame = game?.takeIf { it.isNotBlank() }
         if (!supported(app)) return
         inSession = true
-        val want = pick(game?.takeIf { it.isNotBlank() }?.let { forGame(app, it) }, default(app))
+        val want = pick(activeGame?.let { forGame(app, it) }, default(app))
         if (want == wanted || System.currentTimeMillis() < retryAfter) return
         wanted = want
         worker.execute { if (want == LEAVE) restore(app) else apply(app, want) }
+    }
+
+    /**
+     * A mode picked in the in-game menu. It is saved as the running game's own mode, or as the default when the
+     * session names no game, so the in-game row and the launch setting are one setting. It applies straight away.
+     * [mode] null means "use the default", which only a game has.
+     */
+    fun chooseNow(context: Context, mode: Int?) {
+        require(mode == null || mode in CHOICES)
+        val app = context.applicationContext
+        val game = activeGame
+        if (game != null) setForGame(app, game, mode) else setDefault(app, mode ?: LEAVE)
+        wanted = null
+        retryAfter = 0L
+        if (inSession) onActiveGame(app, game)
     }
 
     fun recoverAsync(context: Context) {
@@ -136,6 +156,7 @@ object RedmagicPerformance {
         val app = context.applicationContext
         inSession = false
         wanted = null
+        activeGame = null
         worker.execute { restore(app) }
     }
 

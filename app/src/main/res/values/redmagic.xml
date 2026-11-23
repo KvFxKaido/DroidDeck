@@ -17,4 +17,8 @@
     <string name="redmagic_app_not_listed">REDMAGIC has no mode listed for %1$s, so there is nothing for DroidDeck to change.</string>
     <string name="redmagic_app_diablo">Diablo is on for this app, so the mode is set in the REDMAGIC overlay.</string>
     <string name="redmagic_app_failed">Couldn\'t read or set REDMAGIC\'s mode: %1$s</string>
+    <string name="redmagic_live_hint_game">Saved for this game, so its launch setting changes too. Applies now and is put back when the session ends.</string>
+    <string name="redmagic_live_hint_default">No game is running, so this changes the default for every game. Applies now.</string>
+    <string name="redmagic_live_diablo">Diablo is on for DroidDeck, so the mode is set in the REDMAGIC overlay.</string>
+    <string name="redmagic_live_not_listed">REDMAGIC has no mode listed for DroidDeck, so there is nothing to change.</string>
 </resources>

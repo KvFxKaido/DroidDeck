@@ -59,6 +59,7 @@ internal fun DroidDeckHudSettings(host: MenuHost, a: DrawerActions, track: (Stri
             chipModifier = track("hud-snap")) { a.onHudSetting("hudSnap", flag(it)) }
     }
     if (GpuClockPin.supported) GpuClockGroup(host, a.gpuClockPin, track("gpuclock"), a.onGpuClockPin)
+    if (com.droiddeck.launcher.core.RedmagicPerformance.supported(LocalContext.current)) RedmagicLiveGroup(host, track("redmagic-mode"))
     if (a.dashboardAvailable && a.secondScreenDisplays.isNotEmpty()) BottomStripSettings(host, track)
     if (!a.hudOn) return
 
