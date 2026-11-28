@@ -1888,21 +1888,11 @@ class SessionService : Service() {
         File(directory, STEAM_GAME_REQUEST + ".tmp").delete()
     }
 
-    private fun killGuestLeftovers() {
-        val me = android.os.Process.myPid()
+    private fun killGuestLeftovers(ended: File?) {
         val rootfs = try { File(filesDir, "linuxfs").canonicalPath } catch (e: Exception) { return } + "/"
-        val procs = File("/proc").listFiles { f -> f.name.all { it.isDigit() } } ?: return
-        val spared = OrphanReaper.spared()
-        var killed = 0
-        for (proc in procs) {
-            val pid = proc.name.toIntOrNull() ?: continue
-            if (pid == me || pid in spared) continue
-            val exe = try { File(proc, "exe").canonicalPath } catch (e: Exception) { continue }
-            if (!exe.startsWith(rootfs)) continue
-            android.os.Process.killProcess(pid)
-            killed++
-        }
-        if (killed > 0) Log.w(TAG, "killed $killed guest process(es) proot no longer tracked")
+        val leftovers = GuestLeftovers.find(rootfs, ended, OrphanReaper.spared() + android.os.Process.myPid())
+        leftovers.forEach { android.os.Process.killProcess(it) }
+        if (leftovers.isNotEmpty()) Log.w(TAG, "killed ${leftovers.size} guest process(es) proot no longer tracked")
     }
 
     private fun killStragglers() {
@@ -2388,7 +2378,7 @@ class SessionService : Service() {
                     com.droiddeck.launcher.stores.gog.GogComet.end(stoppedSession)
                     auxiliary.forEach { (pid, started) -> teardown(pid, started) }
                     if (prootPid > 1) teardown(prootPid)
-                    killGuestLeftovers()
+                    killGuestLeftovers(ended)
                     pruneSystemVulkanRuntime()
                     finishSessionStop(status, stoppedGen, collectEnded)
                     if (launcherEnded) importLauncherGames()
